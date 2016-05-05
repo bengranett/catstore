@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.neighbors import KDTree
-import pypelid.sphere as sphere
+from pypelid.utils import sphere
 
 class Catalogue(object):
     """ Base catalogue class. """
