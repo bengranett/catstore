@@ -28,7 +28,7 @@ class Catalogue(object):
         """ Return properties by name. """
         return self.data[name]
 
-    def __index__(self, slice):
+    def sub(self, slice):
         """ Construct a new catalogue with the specified index slice.
 
         Inputs
@@ -39,12 +39,12 @@ class Catalogue(object):
         -------
         catalogue
         """
-        cat = type(self)()                        # construct new catalogue object
+        cat = self.__new__(self.__class__)
 
         # set attributes
-        cat.data = self.data[slice]
-        cat.lon = self.lon[slice]
-        cat.lat = self.lat[slice]
+        cat.data = self.data.take(slice)
+        cat.lon = self.lon.take(slice)
+        cat.lat = self.lat.take(slice)
         cat.lon_name = self.lon_name
         cat.lat_name = self.lat_name
         return cat
@@ -98,7 +98,7 @@ class Catalogue(object):
         assert(self.data.dtype.fields.has_key(self.lat_name))
 
         self.lon = self.data[self.lon_name].copy()  # copy because these coordinates can be transformed
-        self.lat = self.data[self.lon_name].copy()
+        self.lat = self.data[self.lat_name].copy()
 
     def write_cat(self, filename):
         """ write a data file """
@@ -143,8 +143,9 @@ class Catalogue(object):
         if self.lookup_tree is None: self.build_tree()
 
         r = radius * np.pi/180
+
         xyz = sphere.lonlat2xyz(clon, clat)
-        matches = self.lookup_tree.query_radius(np.transpose(xyz), r)
+        matches = self.lookup_tree.query_radius(np.transpose(xyz).reshape(1,-1), r)
         return matches
 
     def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
@@ -163,10 +164,10 @@ class Catalogue(object):
         indices of objects in selection
         """
         r = np.sqrt(width**2 + height**2)/2.
-        cap = self.query_cap(clon,clat,r)
+        cap = self.query_cap(clon,clat,r)[0]
 
-        lon = self.data[lon_name][cap]
-        lat = self.data[lat_name][cap]
+        lon = self.lon[cap]
+        lat = self.lat[cap]
 
         dlon,dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)], inverse=True)
 
@@ -194,7 +195,7 @@ class Catalogue(object):
         catalogue
         """
         matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-        return self[matches]
+        return self.sub(matches)
 
 
 class CartesianCatalogue(Catalogue):
