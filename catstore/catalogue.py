@@ -1,25 +1,39 @@
 import numpy as np
+import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere
 
 class Catalogue(object):
     """ Base catalogue class. """
-    ra = []
-    dec = []
-    properties = []
 
-    def __init__(self, ra, dec):
-        """ """
-        self.ra = ra
-        self.dec = dec
-        self.build_tree()
+    lon_name = 'alpha'
+    lat_name = 'delta'
 
-    def sub_catalogue(self, indices):
-        """ Construct a new catalogue with the specified objects.
+    data = None
+    lookup_tree = None
+
+    lon = None
+    lat = None
+
+    def __init__(self, cat=None):
+        """ 
+        Inputs
+        ------
+        cat - take data from this catalog if given.
+        """
+        if cat is not None:
+            self.make_view(cat)
+
+    def __getitem__(self, name):
+        """ Return properties by name. """
+        return self.data[name]
+
+    def __index__(self, slice):
+        """ Construct a new catalogue with the specified index slice.
 
         Inputs
         ------
-        indices - indices of objects
+        slice - indices of objects
 
         Outputs
         -------
@@ -28,10 +42,68 @@ class Catalogue(object):
         cat = type(self)()                        # construct new catalogue object
 
         # set attributes
-        cat.ra = self.ra[indices]
-        cat.dec = self.dec[indices]
-        #cat.properties = self.properties[indices]
+        cat.data = self.data[slice]
+        cat.lon = self.lon[slice]
+        cat.lat = self.lat[slice]
+        cat.lon_name = self.lon_name
+        cat.lat_name = self.lat_name
         return cat
+
+    def make_view(self, cat):
+        """ Copy data in from a catalogue. """
+        self.data = cat.data
+        self.lookup_tree = cat.lookup_tree
+        self.lon_name = cat.lon_name
+        self.lat_name = cat.lat_name
+        self.lon = cat.lon
+        self.lat = cat.lat
+
+    def read_cat(self, filename, names=None, converters=None, fits_ext=1):
+        """ Read in a data file containing the input catalogue. 
+
+        Understands the following extensions:
+        dat  - text file to be read with numpy.genfromtxt
+        fits - fits file to be read with fitsio
+
+        Inputs
+        ------
+        filename   - file to load
+        names      - column names
+        converters - dictionary with types to feed to numpy.genfromtxt (not used for fits)
+        fits_ext   - fits extension number (default 1)
+
+        Outputs
+        -------
+        structured array
+        """
+
+        if filename.endswith('.dat'):
+            try:
+                self.data = np.genfromtxt(filename, names=names, converters=converters)
+            except ValueError as e:
+                print e.message
+                raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
+
+        elif filename.endswith('.fits'):
+            try:
+                self.data = fitsio.read(filename, columns=names, ext=fits_ext)
+            except ValueError as e:
+                print e.message
+                raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
+
+        else:
+            raise Exception("Unknown file type: %s"%filename)
+
+        assert(self.data.dtype.fields.has_key(self.lon_name))
+        assert(self.data.dtype.fields.has_key(self.lat_name))
+
+        self.lon = self.data[self.lon_name].copy()  # copy because these coordinates can be transformed
+        self.lat = self.data[self.lon_name].copy()
+
+    def write_cat(self, filename):
+        """ write a data file """
+        raise Exception("Not implemented!")
+
 
     def build_tree(self):
         """ Initialize the data structure for fast spatial lookups. 
@@ -44,43 +116,43 @@ class Catalogue(object):
         -------
         None
         """
-        xyz = sphere.lonlat2xyz(self.ra, self.dec)
+        xyz = sphere.lonlat2xyz(self.lon, self.lat)
         self.lookup_tree = KDTree(np.transpose(xyz))
 
     def project(self, transform):
         """ Apply spatial projection. """
-        self.ra, self.dec = transform(ra, dec)
+        self.lon, self.lat = transform(self.lon, self.lat)
 
     def to_cartesian(self):
         """ Return a cartesian catalogue """
-        cat = CartesianCatalogue(self.ra, self,dec)
-        return cat
+        return CartesianCatalogue(self)
 
-
-    def query_cap(self, cra, cdec, radius=1.):
-        """ Find neighbors to a given point (ra, dec). 
+    def query_cap(self, clon, clat, radius=1.):
+        """ Find neighbors to a given point (clon, clat). 
 
         Inputs
         ------
-        cra - center ra degrees
-        cdec - center dec degrees
+        clon - center longitude degrees
+        clat - center latitude degrees
         radius - degrees
 
         Outputs
         -------
         indices of objects in selection
         """
+        if self.lookup_tree is None: self.build_tree()
+
         r = radius * np.pi/180
-        xyz = sphere.lonlat2xyz(cra,cdec)
+        xyz = sphere.lonlat2xyz(clon, clat)
         matches = self.lookup_tree.query_radius(np.transpose(xyz), r)
         return matches
 
-    def query_box(self,  cra, cdec, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
+    def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
         """ Find objects in a rectangle. 
         Inputs
         ------
-        cra - center ra
-        cdec - center dec
+        clon - center longitude
+        clat - center latitude
         width - width (degrees)
         height - height (degrees)
         padding - add this padding to width and height (degrees)
@@ -91,27 +163,27 @@ class Catalogue(object):
         indices of objects in selection
         """
         r = np.sqrt(width**2 + height**2)/2.
-        cap = self.query_cap(cra,cdec,r)
+        cap = self.query_cap(clon,clat,r)
 
-        ra = self.ra[cap]
-        dec = self.dec[cap]
+        lon = self.data[lon_name][cap]
+        lat = self.data[lat_name][cap]
 
-        dra,ddec = sphere.rotate_lonlat(ra, dec, [(orientation, cra, cdec)], inverse=True)
+        dlon,dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)], inverse=True)
 
-        sel_ra = np.abs(dra) < (width/2. + pad_ra)
-        sel_dec = np.abs(ddec) < (height/2. + pad_dec)
-        sel = np.where(sel_ra & sel_dec)
+        sel_lon = np.abs(dlon) < (width/2. + pad_ra)
+        sel_lat = np.abs(dlat) < (height/2. + pad_dec)
+        sel = np.where(sel_lon & sel_lat)
      
         matches = np.take(cap, sel[0])
         return matches
 
-    def crop_box(self, cra, cdec, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
+    def crop_box(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
         """ Select objects in a rectangle and return a new catalogue object.
 
         Inputs
         ------
-        cra - center ra
-        cdec - center dec
+        clon - center ra
+        clat - center dec
         width - width (degrees)
         height - height (degrees)
         padding - add this padding to width and height (degrees)
@@ -121,18 +193,12 @@ class Catalogue(object):
         -------
         catalogue
         """
-        matches = self.query_box(cra, cdec, width, height, pad_ra, pad_dec, orientation)
-        return self.sub_catalogue(matches)
+        matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
+        return self[matches]
 
 
-class CartesianCatalogue(object):
+class CartesianCatalogue(Catalogue):
     """ """
-    def __init__(self, x, y):
-        """ """
-        self.x = x
-        self.y = y
-        self.build_tree()
-
     def build_tree(self):
         """ Initialize the data structure for fast spatial lookups. 
 
@@ -144,7 +210,7 @@ class CartesianCatalogue(object):
         -------
         None
         """
-        self.lookup_tree = KDTree(np.transpose([self.x, self.y]))
+        self.lookup_tree = KDTree(np.transpose([self.lon, self.lat]))
 
     def query_disk(self, x, y, radius=1.):
         """ Find neighbors to a given point (ra, dec). 
@@ -159,9 +225,12 @@ class CartesianCatalogue(object):
         -------
         indices of objects in selection
         """
+        if self.lookup_tree is None: self.build_tree()
+
         matches = self.lookup_tree.query_radius(np.transpose([x,y]), radius)
         return matches
 
+    query_cap = query_disk
 
     def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0):
         """ Find objects in a rectangle. 
