@@ -23,6 +23,9 @@ class Catalogue(object):
         """
         if cat is not None:
             self.make_view(cat)
+        else:
+            self.data = np.array([])
+        self.file = None
 
     def __getitem__(self, name):
         """ Return properties by name. """
@@ -32,7 +35,10 @@ class Catalogue(object):
         description = "Catalogue of " + str(len(self.data)) + " objects."
         return description
 
-    def sub(self, slice):
+    def __len__(self):
+        return len(self.data)
+
+    def sub(self, indices):
         """ Construct a new catalogue with the specified index slice.
 
         Inputs
@@ -43,12 +49,12 @@ class Catalogue(object):
         -------
         catalogue
         """
-        cat = self.__new__(self.__class__)
+        cat = Catalogue()
 
         # set attributes
-        cat.data = self.data.take(slice)
-        cat.lon = self.lon.take(slice)
-        cat.lat = self.lat.take(slice)
+        cat.data = self.data[indices]
+        cat.lon = self.lon[indices]
+        cat.lat = self.lat[indices]
         cat.lon_name = self.lon_name
         cat.lat_name = self.lat_name
         return cat
