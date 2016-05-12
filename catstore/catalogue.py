@@ -28,6 +28,10 @@ class Catalogue(object):
         """ Return properties by name. """
         return self.data[name]
 
+    def __str__(self):
+        description = "Catalogue of " + str(len(self.data)) + " objects."
+        return description
+
     def sub(self, slice):
         """ Construct a new catalogue with the specified index slice.
 
