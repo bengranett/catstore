@@ -1,7 +1,8 @@
 import numpy as np
 import fitsio
 from sklearn.neighbors import KDTree
-from pypelid.utils import sphere
+from pypelid.utils import sphere, misc
+import healpy as hp
 
 class Catalogue(object):
     """ Base catalogue class. """
@@ -207,6 +208,27 @@ class Catalogue(object):
         matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
         return self.sub(matches)
 
+    def plot(self):
+        """ Create a Mollweide projected plot of the objects. 
+
+        Inputs
+        ------
+        None
+
+        Outputs
+        ------
+        None
+        """
+
+        # Coordinates in radians
+        x = misc.torad(self.lon)
+        y = np.pi-(misc.torad(self.lat)+np.pi/2.0)
+
+        # Setup healpix
+        fig = hp.visufunc.projscatter(y, x, s=10., lw=0.0)
+        hp.graticule()
+
+        return fig
 
 class CartesianCatalogue(Catalogue):
     """ """
