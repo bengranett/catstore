@@ -156,6 +156,7 @@ class Catalogue(object):
         r = radius * np.pi/180
 
         xyz = sphere.lonlat2xyz(clon, clat)
+
         matches = self.lookup_tree.query_radius(np.transpose(xyz).reshape(1,-1), r)
         return matches
 
@@ -243,7 +244,7 @@ class CartesianCatalogue(Catalogue):
         -------
         None
         """
-        self.lookup_tree = KDTree(np.transpose([self.x, self.y]))
+        self.lookup_tree = KDTree(np.transpose([self.lon, self.lat]))
 
     def query_disk(self, x, y, radius=1.):
         """ Find neighbors to a given point (ra, dec).
@@ -296,8 +297,8 @@ class CartesianCatalogue(Catalogue):
 
         results = []
         for i, match in enumerate(matches):
-            dx = self.x[match] - cx[i]
-            dy = self.y[match] - cy[i]
+            dx = self.lon[match] - cx[i]
+            dy = self.lat[match] - cy[i]
             dxt = dx * costheta - dy * sintheta
             dyt = dx * sintheta + dy * costheta
 
