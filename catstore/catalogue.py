@@ -1,7 +1,8 @@
 import numpy as np
 import fitsio
 from sklearn.neighbors import KDTree
-from pypelid.utils import sphere
+from pypelid.utils import sphere, misc
+import healpy as hp
 
 class Catalogue(object):
     """ Base catalogue class. """
@@ -16,19 +17,29 @@ class Catalogue(object):
     lat = None
 
     def __init__(self, cat=None):
-        """ 
+        """
         Inputs
         ------
         cat - take data from this catalog if given.
         """
         if cat is not None:
             self.make_view(cat)
+        else:
+            self.data = np.array([])
+        self.file = None
 
     def __getitem__(self, name):
         """ Return properties by name. """
         return self.data[name]
 
-    def sub(self, slice):
+    def __str__(self):
+        description = "Catalogue of " + str(len(self.data)) + " objects."
+        return description
+
+    def __len__(self):
+        return len(self.data)
+
+    def sub(self, indices):
         """ Construct a new catalogue with the specified index slice.
 
         Inputs
@@ -39,12 +50,12 @@ class Catalogue(object):
         -------
         catalogue
         """
-        cat = self.__new__(self.__class__)
+        cat = Catalogue()
 
         # set attributes
-        cat.data = self.data.take(slice)
-        cat.lon = self.lon.take(slice)
-        cat.lat = self.lat.take(slice)
+        cat.data = self.data[indices]
+        cat.lon = self.lon[indices]
+        cat.lat = self.lat[indices]
         cat.lon_name = self.lon_name
         cat.lat_name = self.lat_name
         return cat
@@ -59,7 +70,7 @@ class Catalogue(object):
         self.lat = cat.lat
 
     def read_cat(self, filename, names=None, converters=None, fits_ext=1):
-        """ Read in a data file containing the input catalogue. 
+        """ Read in a data file containing the input catalogue.
 
         Understands the following extensions:
         dat  - text file to be read with numpy.genfromtxt
@@ -106,7 +117,7 @@ class Catalogue(object):
 
 
     def build_tree(self):
-        """ Initialize the data structure for fast spatial lookups. 
+        """ Initialize the data structure for fast spatial lookups.
 
         Inputs
         ------
@@ -128,7 +139,7 @@ class Catalogue(object):
         return CartesianCatalogue(self)
 
     def query_cap(self, clon, clat, radius=1.):
-        """ Find neighbors to a given point (clon, clat). 
+        """ Find neighbors to a given point (clon, clat).
 
         Inputs
         ------
@@ -145,11 +156,12 @@ class Catalogue(object):
         r = radius * np.pi/180
 
         xyz = sphere.lonlat2xyz(clon, clat)
+
         matches = self.lookup_tree.query_radius(np.transpose(xyz).reshape(1,-1), r)
         return matches
 
     def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
-        """ Find objects in a rectangle. 
+        """ Find objects in a rectangle.
         Inputs
         ------
         clon - center longitude
@@ -174,7 +186,7 @@ class Catalogue(object):
         sel_lon = np.abs(dlon) < (width/2. + pad_ra)
         sel_lat = np.abs(dlat) < (height/2. + pad_dec)
         sel = np.where(sel_lon & sel_lat)
-     
+
         matches = np.take(cap, sel[0])
         return matches
 
@@ -197,11 +209,32 @@ class Catalogue(object):
         matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
         return self.sub(matches)
 
+    def plot(self):
+        """ Create a Mollweide projected plot of the objects.
+
+        Inputs
+        ------
+        None
+
+        Outputs
+        ------
+        None
+        """
+
+        # Coordinates in radians
+        x = misc.torad(self.lon)
+        y = np.pi-(misc.torad(self.lat)+np.pi/2.0)
+
+        # Setup healpix
+        fig = hp.visufunc.projscatter(y, x, s=10., lw=0.0)
+        hp.graticule()
+
+        return fig
 
 class CartesianCatalogue(Catalogue):
     """ """
     def build_tree(self):
-        """ Initialize the data structure for fast spatial lookups. 
+        """ Initialize the data structure for fast spatial lookups.
 
         Inputs
         ------
@@ -214,7 +247,7 @@ class CartesianCatalogue(Catalogue):
         self.lookup_tree = KDTree(np.transpose([self.lon, self.lat]))
 
     def query_disk(self, x, y, radius=1.):
-        """ Find neighbors to a given point (ra, dec). 
+        """ Find neighbors to a given point (ra, dec).
 
         Inputs
         ------
@@ -233,32 +266,47 @@ class CartesianCatalogue(Catalogue):
 
     query_cap = query_disk
 
-    def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0):
-        """ Find objects in a rectangle. 
+    def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
+        """ Find objects in a rectangle.
         Inputs
         ------
-        cx - center x
-        cy - center y
-        width - width
-        height - height
-        padding - add this padding to width and height
+        cx - array center x
+        cy - array center y
+        width - float width
+        height - float height
+        pad_x - float add this padding to width
+        pad_y - float add this padding to height
+        orientation - float position angle of the box
 
         Outputs
         -------
-        indices of objects in selection
+        list of indices of objects in selection
         """
+        try:
+            len(cx)
+        except TypeError:
+            cx = np.array([cx])
+            cy = np.array([cy])
+        theta = misc.torad(orientation)
+        costheta = np.cos(theta)
+        sintheta = np.sin(theta)
+
         r = np.sqrt(width**2 + height**2)/2.
-        cap = self.query_disk(cx,cy,r)
 
-        dx = self.x[cap] - cx
-        dy = self.y[cap] - cy
+        matches = self.query_disk(cx,cy,r)
 
-        sel_x = np.abs(dx) < (width/2. + pad_ra)
-        sel_y = np.abs(ddec) < (height/2. + pad_dec)
-        sel = np.where(sel_x & sel_y)
-     
-        matches = np.take(cap, sel[0])
-        return matches
+        results = []
+        for i, match in enumerate(matches):
+            dx = self.lon[match] - cx[i]
+            dy = self.lat[match] - cy[i]
+            dxt = dx * costheta - dy * sintheta
+            dyt = dx * sintheta + dy * costheta
 
+            sel_x = np.abs(dxt) < (width/2. + pad_x)
+            sel_y = np.abs(dyt) < (height/2. + pad_y)
+            sel = np.where(sel_x & sel_y)
 
-
+            results.append(np.take(match, sel[0]))
+        if len(results)==1:
+            return results[0]
+        return results
