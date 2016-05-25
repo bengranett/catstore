@@ -27,6 +27,7 @@ class Catalogue(object):
         else:
             self.data = np.array([])
         self.file = None
+        self.index = None
 
     def __getitem__(self, name):
         """ Return properties by name. """
@@ -58,6 +59,8 @@ class Catalogue(object):
         cat.lat = self.lat[indices]
         cat.lon_name = self.lon_name
         cat.lat_name = self.lat_name
+        cat.index = indices
+
         return cat
 
     def make_view(self, cat):
