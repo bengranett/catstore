@@ -10,13 +10,7 @@ class Catalogue(object):
     lon_name = 'alpha'
     lat_name = 'delta'
 
-    data = None
-    lookup_tree = None
-
-    lon = None
-    lat = None
-
-    def __init__(self, cat=None):
+    def __init__(self, cat=None, data=None):
         """
         Inputs
         ------
@@ -24,21 +18,51 @@ class Catalogue(object):
         """
         if cat is not None:
             self.make_view(cat)
+            return
+        elif data is not None:
+            self.data = data
         else:
             self.data = np.array([])
+
+        # copy lon and lat arrays if we have them
+        if self.__contains__(self.lon_name):
+            self.lon = self.data[self.lon_name].copy()
+        if self.__contains__(self.lat_name):
+            self.lat = self.data[self.lat_name].copy()
+
+        self.lookup_tree = None
         self.file = None
         self.index = None
 
-    def __getitem__(self, name):
-        """ Return properties by name. """
-        return self.data[name]
+    def __getitem__(self, key):
+        """ Return properties by name or return slices. """
+        if type(key) is type("hi"):
+            return self.data[key]
+        return self.sub(key)
+
+    def __setitem__(self, key, cat):
+        """ Set slices of the catalogue. """
+        if type(key) is type ("hi"):
+            self.data[key] = cat
+            return
+        self.data[key] = cat.data
+        self.lon[key] = cat.lon
+        self.lat[key] = cat.lat
+        self.lookup_tree = None
 
     def __str__(self):
+        """ helpful string representation """
         description = "Catalogue of " + str(len(self.data)) + " objects."
         return description
 
     def __len__(self):
+        """ Return length of catalogue """
         return len(self.data)
+
+    def __contains__(self, key):
+        """ Check if we have the given field key """
+        if self.data.dtype.fields is None: return False
+        return self.data.dtype.fields.has_key(key)
 
     def sub(self, indices):
         """ Construct a new catalogue with the specified index slice.
