@@ -226,15 +226,17 @@ class Catalogue(object):
         None
         """
 
-        # Coordinates in radians
-        x = misc.torad(self.lon)
-        y = np.pi-(misc.torad(self.lat)+np.pi/2.0)
+        # Subsample a big catalogue
+        if len(self) > 10000:
+            index = np.arange(len(self))
+            index = np.random.choice(index,10000)
+            # Coordinates in radians
+            x = misc.torad(self.lon[index])
+            y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
 
         # Setup healpix
-        fig = hp.visufunc.projscatter(y, x, s=10., lw=0.0)
         hp.graticule()
-
-        return fig
+        hp.visufunc.projscatter(y, x, s=10., lw=0.0)
 
 class CartesianCatalogue(Catalogue):
     """ """
