@@ -157,7 +157,12 @@ class Catalogue(object):
 
         xyz = sphere.lonlat2xyz(clon, clat)
 
-        matches = self.lookup_tree.query_radius(np.transpose(xyz).reshape(1,-1), r)
+        if misc.is_number(xyz[0]):
+            xyz = np.transpose(xyz).reshape(1,-1)
+        else:
+            xyz = np.transpose(xyz)
+
+        matches = self.lookup_tree.query_radius(xyz, r)
         return matches
 
     def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
