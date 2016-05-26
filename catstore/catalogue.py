@@ -179,6 +179,12 @@ class Catalogue(object):
         indices of objects in selection
         """
         try:
+            if len(clon) == 0:
+                return []
+        except TypeError:
+            pass
+
+        try:
             self.lookup_tree
         except AttributeError:
             self.build_tree()
@@ -212,6 +218,12 @@ class Catalogue(object):
         -------
         indices of objects in selection
         """
+        try:
+            if len(clon) == 0:
+                return []
+        except TypeError:
+            pass
+
         r = np.sqrt(width**2 + height**2)/2.
         cap = self.query_cap(clon,clat,r)[0]
 
@@ -299,6 +311,12 @@ class CartesianCatalogue(Catalogue):
         indices of objects in selection
         """
         try:
+            if len(x) == 0:
+                return []
+        except TypeError:
+            pass
+
+        try:
             self.lookup_tree
         except AttributeError:
             self.build_tree()
@@ -331,6 +349,10 @@ class CartesianCatalogue(Catalogue):
         except TypeError:
             cx = np.array([cx])
             cy = np.array([cy])
+
+        if len(cx) == 0:
+            return []
+
         theta = misc.torad(orientation)
         costheta = np.cos(theta)
         sintheta = np.sin(theta)
