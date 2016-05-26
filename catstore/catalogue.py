@@ -259,7 +259,7 @@ class Catalogue(object):
         matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
         return self.sub(matches)
 
-    def plot(self):
+    def plot(self, c='b'):
         """ Create a Mollweide projected plot of the objects.
 
         Inputs
@@ -272,8 +272,8 @@ class Catalogue(object):
         """
 
         # Subsample a big catalogue
+        index = np.arange(len(self))
         if len(self) > 10000:
-            index = np.arange(len(self))
             index = np.random.choice(index,10000)
             # Coordinates in radians
             x = misc.torad(self.lon[index])
@@ -281,7 +281,9 @@ class Catalogue(object):
 
         # Setup healpix
         hp.graticule()
-        hp.visufunc.projscatter(y, x, s=10., lw=0.0)
+        hp.visufunc.projscatter(y, x, s=10., lw=0.0, c=c)
+
+        return index
 
 class CartesianCatalogue(Catalogue):
     """ """
