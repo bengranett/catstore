@@ -95,6 +95,7 @@ class Catalogue(object):
         self.lat_name = cat.lat_name
         self.lon = cat.lon
         self.lat = cat.lat
+        self.index = cat.index
 
     def read_cat(self, filename, names=None, converters=None, fits_ext=1):
         """ Read in a data file containing the input catalogue.
