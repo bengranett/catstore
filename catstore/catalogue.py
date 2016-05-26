@@ -178,6 +178,11 @@ class Catalogue(object):
         -------
         indices of objects in selection
         """
+        try:
+            self.lookup_tree
+        except AttributeError:
+            self.build_tree()
+
         if self.lookup_tree is None: self.build_tree()
 
         r = radius * np.pi/180
@@ -293,6 +298,11 @@ class CartesianCatalogue(Catalogue):
         -------
         indices of objects in selection
         """
+        try:
+            self.lookup_tree
+        except AttributeError:
+            self.build_tree()
+
         if self.lookup_tree is None: self.build_tree()
 
         matches = self.lookup_tree.query_radius(np.transpose([x,y]), radius)
