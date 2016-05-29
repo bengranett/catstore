@@ -10,7 +10,7 @@ class Catalogue(object):
     lon_name = 'alpha'
     lat_name = 'delta'
 
-    def __init__(self, cat=None, data=None):
+    def __init__(self, cat=None, data=None, lon=None, lat=None):
         """
         Inputs
         ------
@@ -21,6 +21,10 @@ class Catalogue(object):
             return
         elif data is not None:
             self.data = data
+        elif lon is not None:
+            self.lon = lon
+            self.lat = lat
+            self.data = np.array([])
         else:
             self.data = np.array([])
 
@@ -364,6 +368,10 @@ class CartesianCatalogue(Catalogue):
 
         matches = self.query_disk(cx,cy,r)
 
+        # broadcast the shape
+        width = np.ones(len(cx))*width
+        height = np.ones(len(cx))*height
+
         results = []
         for i, match in enumerate(matches):
             dx = self.lon[match] - cx[i]
@@ -371,8 +379,8 @@ class CartesianCatalogue(Catalogue):
             dxt = dx * costheta - dy * sintheta
             dyt = dx * sintheta + dy * costheta
 
-            sel_x = np.abs(dxt) < (width/2. + pad_x)
-            sel_y = np.abs(dyt) < (height/2. + pad_y)
+            sel_x = np.abs(dxt) < (width[i]/2. + pad_x)
+            sel_y = np.abs(dyt) < (height[i]/2. + pad_y)
             sel = np.where(sel_x & sel_y)
 
             results.append(np.take(match, sel[0]))
