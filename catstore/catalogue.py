@@ -37,6 +37,7 @@ class Catalogue(object):
         self.lookup_tree = None
         self.file = None
         self.index = None
+        self.length = None
 
     def __getitem__(self, key):
         """ Return properties by name or return slices. """
@@ -61,7 +62,9 @@ class Catalogue(object):
 
     def __len__(self):
         """ Return length of catalogue """
-        return len(self.data)
+        if self.length is None:
+            self.length = len(self.data)
+        return self.length
 
     def __contains__(self, key):
         """ Check if we have the given field key """
@@ -88,6 +91,7 @@ class Catalogue(object):
         cat.lon_name = self.lon_name
         cat.lat_name = self.lat_name
         cat.index = indices
+        cat.length = None
 
         return cat
 
@@ -100,6 +104,7 @@ class Catalogue(object):
         self.lon = cat.lon
         self.lat = cat.lat
         self.index = cat.index
+        self.length = cat.length
 
     def read_cat(self, filename, names=None, converters=None, fits_ext=1):
         """ Read in a data file containing the input catalogue.
