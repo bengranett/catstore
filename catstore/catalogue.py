@@ -280,17 +280,27 @@ class Catalogue(object):
         None
         """
 
+        try:
+            lon = self['alpha']
+            lat = self['delta']
+        except ValueError:
+            lon = self.lon
+            lat = self.lat
+            
         # Subsample a big catalogue
         index = np.arange(len(self))
         if len(self) > 10000:
             index = np.random.choice(index,10000)
-            # Coordinates in radians
-            x = misc.torad(self.lon[index])
-            y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
+            lon = lon[index]
+            lat = lat[index]
+
+        # Coordinates in radians
+        lon = misc.torad(lon)
+        lat = np.pi-(misc.torad(lat)+np.pi/2.0)
 
         # Setup healpix
         hp.graticule()
-        hp.visufunc.projscatter(y, x, s=10., lw=0.0, c=c)
+        hp.visufunc.projscatter(lat, lon, s=10., lw=0.0, c=c)
 
         return index
 
