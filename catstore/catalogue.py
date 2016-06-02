@@ -268,7 +268,7 @@ class Catalogue(object):
         matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
         return self.sub(matches)
 
-    def plot(self, c='b'):
+    def plot(self, c='b', downsample=True):
         """ Create a Mollweide projected plot of the objects.
 
         Inputs
@@ -287,12 +287,13 @@ class Catalogue(object):
             lon = self.lon
             lat = self.lat
             
-        # Subsample a big catalogue
+        # Downsample a big catalogue
         index = np.arange(len(self))
-        if len(self) > 10000:
-            index = np.random.choice(index,10000)
-            lon = lon[index]
-            lat = lat[index]
+        if downsample:
+            if len(self) > 10000:
+                index = np.random.choice(index,10000)
+                lon = lon[index]
+                lat = lat[index]
 
         # Coordinates in radians
         lon = misc.torad(lon)
