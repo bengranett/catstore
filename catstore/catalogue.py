@@ -1,5 +1,6 @@
 import numpy as np
 import fitsio
+import os.path as op
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
 import healpy as hp
@@ -38,6 +39,7 @@ class Catalogue(object):
 		self.file = None
 		self.index = None
 		self.length = None
+		self.name = 'Catalogue'
 
 	def __getitem__(self, key):
 		""" Return properties by name or return slices. """
@@ -128,13 +130,16 @@ class Catalogue(object):
 		if filename.endswith('.dat'):
 			try:
 				self.data = np.genfromtxt(filename, names=names, converters=converters)
+				self.header = 'from ASCII'
+				self.name = op.basename(filename)
 			except ValueError as e:
 				print e.message
 				raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
 
 		elif filename.endswith('.fits'):
 			try:
-				self.data = fitsio.read(filename, columns=names, ext=fits_ext)
+				self.data, self.header = fitsio.read(filename, columns=names, ext=fits_ext, header=True)
+				self.name = self.header['EXTNAME']
 			except ValueError as e:
 				print e.message
 				raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
