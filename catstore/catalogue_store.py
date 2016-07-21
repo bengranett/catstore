@@ -36,17 +36,22 @@ class CatalogueStore(object):
 
         The file format is guessed from the extension.
         """
+
+        # Sequentially try to load instead
         if filename.endswith("fits"):
             self.load_fits(filename)
         elif filename.endswith("dat"):
             self.load_ascii(filename)
         elif filename.endswith("hdf5") or filename.endswith("pypelid"):
-            self.load_hdf5(filename)
+            self.load_pypelid(filename)
         else:
             raise Exception("Unknown file format: %s"%filename)
 
-    def load_hdf5(self, filename):
+    def load_pypelid(self, filename):
         """ Load a pypelid catalogue store file. """
+
+        # test that the pypelid stamp is in the header
+
         datastruct = h5py.File(filename)
         self.partition_mode = datastruct['partition_mode']
         self.zone_resolution = datastruct['zone_resolution']
