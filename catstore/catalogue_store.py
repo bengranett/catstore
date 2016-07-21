@@ -2,7 +2,7 @@ import numpy as N
 import h5py
 
 import catalogue
-import vm.healpix_projection as HP
+import pypelid.vm.healpix_projection as HP
 
 
 class CatalogueStore(object):
@@ -30,22 +30,22 @@ class CatalogueStore(object):
         self._hp_projector = HP.HealpixProjector(2**self.zone_resolution, self.hp_order)
 
 
-    def load(filename):
+    def load(self, filename):
         """ Load a catalogue from disk.  Multiple formats are supported to allow easy
         conversion for preprocessing catalogues.
 
         The file format is guessed from the extension.
         """
-        if file.endswith("fits"):
+        if filename.endswith("fits"):
             self.load_fits(filename)
-        elif file.endswith("dat"):
+        elif filename.endswith("dat"):
             self.load_ascii(filename)
-        elif file.endswith("hdf5") of file.endswith("pypelid"):
+        elif filename.endswith("hdf5") or filename.endswith("pypelid"):
             self.load_hdf5(filename)
         else:
             raise Exception("Unknown file format: %s"%filename)
 
-    def load_hdf5(filename):
+    def load_hdf5(self, filename):
         """ Load a pypelid catalogue store file. """
         datastruct = h5py.File(filename)
         self.partition_mode = datastruct['partition_mode']
@@ -55,7 +55,7 @@ class CatalogueStore(object):
         self.filename = datastruct.filename
         self.name = datastruct.name
 
-    def load_fits(filename, names=None, fits_ext=1):
+    def load_fits(self, filename, names=None, fits_ext=1):
         """ Load a fits data file. """
         try:
             data, fits_header = fitsio.read(filename, columns=names, ext=fits_ext, header=True)
@@ -70,11 +70,11 @@ class CatalogueStore(object):
         self.zone_resolution = 0
         self.zone_order = None
 
-    def load_ascii(filename):
+    def load_ascii(self, filename):
         """ Load data in ascii format """
         raise Exception("Not implemented")
 
-    def write(filename):
+    def write(self, filename):
         """ Construct and write a new catalogue store file in pypelid format. """
         pass
 
