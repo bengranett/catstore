@@ -18,7 +18,7 @@ class CatalogueStore(object):
     FULLSKY = 0
     HEALPIX = 1
 
-    def __init__(self, filename=None, zone_resolution=2, zone_order=HP.NEST):
+    def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING):
         """ Initialize the catalogue backend. """
         self.zone_resolution = zone_resolution
         self.zone_order = zone_order
