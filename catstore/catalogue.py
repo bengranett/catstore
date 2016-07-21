@@ -1,9 +1,9 @@
 import logging
 import numpy as np
+import h5py
 import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
-from vm.healpix_projection import HealpixProjector
 
 class Catalogue(object):
     """ Base catalogue class. """
@@ -11,7 +11,8 @@ class Catalogue(object):
     _lon_name = 'alpha'
     _lat_name = 'delta'
 
-    def __init__(self, cat=None, data=None, zone_resolution=5, hp_order='nest'):
+    def __init__(self, cat=None, data=None, filename=None, 
+        zone_resolution=5, hp_order='nest'):
         """
         Inputs
         ------
@@ -20,18 +21,11 @@ class Catalogue(object):
         if cat is not None:
             self.make_view(cat)
             return
-        elif data is not None:
-            self._data = data
-        else:
-            self._data = np.array([])
 
-        self._hp_projector = HealpixProjector(2**zone_resolution, hp_order)
+        self._filename = filename
 
-        # copy lon and lat arrays if we have them
-        if self.__contains__(self._lon_name):
-            self._lon = self._data[self._lon_name].copy()
-        if self.__contains__(self._lat_name):
-            self._lat = self._data[self._lat_name].copy()
+        if os.path.exists(filename):
+            self.read(filename)
 
         self._lookup_tree = None
         self._file = None
@@ -121,7 +115,7 @@ class Catalogue(object):
         self._lon = cat._lon
         self._lat = cat._lat
 
-    def read_cat(self, filename, names=None, converters=None, fits_ext=1):
+    def read(self, filename):
         """ Read in a data file containing the input catalogue.
 
         Understands the following extensions:
@@ -139,34 +133,11 @@ class Catalogue(object):
         -------
         structured array
         """
+        pass
 
-        if filename.endswith('.dat'):
-            try:
-                self._data = np.genfromtxt(filename, names=names, converters=converters)
-            except ValueError as e:
-                print e.message
-                raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
-
-        elif filename.endswith('.fits'):
-            try:
-                self._data = fitsio.read(filename, columns=names, ext=fits_ext)
-            except ValueError as e:
-                print e.message
-                raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
-
-        else:
-            raise Exception("Unknown file type: %s"%filename)
-
-        assert(self._data.dtype.fields.has_key(self._lon_name))
-        assert(self._data.dtype.fields.has_key(self._lat_name))
-
-        self._lon = self._data[self._lon_name].copy()  # copy because these coordinates can be transformed
-        self._lat = self._data[self._lat_name].copy()
-
-    def write_cat(self, filename):
+    def write(self, filename):
         """ write a data file """
-        raise Exception("Not implemented!")
-
+        pass
 
     def build_tree(self):
         """ Initialize the data structure for fast spatial lookups.
@@ -179,153 +150,8 @@ class Catalogue(object):
         -------
         None
         """
-        xyz = sphere.lonlat2xyz(self._lon, self._lat)
-        self._lookup_tree = KDTree(np.transpose(xyz))
-
-
-    def projection(self, transform):
-        """ Apply spatial projection. """
-        self._transform = transform
-        return self
-        #self._lon, self._lat = transform(self._lon, self._lat)
-
-    #def to_cartesian(self):
-    #    """ Return a cartesian catalogue """
-    #    return CartesianCatalogue(self)
-
-    def _get_zones_of_interest(self, lon, lat, radius):
-        """ Determine the zones that overlap the points (lon,lat) within the radius."""
-        raise Exception("Not implemented")
-        # pix = np.arange(self._healpix_projector.npix)
-        # grid = self._healpix_projector.pix2ang(pix)
-        # lookup_tree = KDTree(grid)
-
-        # self._healpix_projector.ang2pix(lon, lat)
-
-        return zones
-
-    def query_cap(self, clon, clat, radius=1.):
-        """ Find neighbors to a given point (clon, clat).
-
-        Inputs
-        ------
-        clon - center longitude degrees
-        clat - center latitude degrees
-        radius - degrees
-
-        Outputs
-        -------
-        indices of objects in selection
-        """
-        zones = self._get_zones_of_interest(clon, clat, radius)
-
-        matches = []
-
-        for zone_i in zones:
-
-            if not self._trees.has_key(zone_i):
-                self._build_tree(zone_i)
-
-            r = radius * np.pi/180
-
-            xyz = sphere.lonlat2xyz(clon, clat)
-
-            if misc.is_number(xyz[0]):
-                xyz = np.transpose(xyz).reshape(1,-1)
-            else:
-                xyz = np.transpose(xyz)
-
-            matches.append(self._trees[zone_i].query_radius(xyz, r))
-
-        return np.concatenate(matches)
-
-    def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
-        """ Find objects in a rectangle.
-        Inputs
-        ------
-        clon - center longitude
-        clat - center latitude
-        width - width (degrees)
-        height - height (degrees)
-        padding - add this padding to width and height (degrees)
-        orientation - (degrees about center)
-
-        Outputs
-        -------
-        indices of objects in selection
-        """
-        r = np.sqrt(width**2 + height**2)/2.
-        cap = self.query_cap(clon,clat,r)[0]
-
-        lon = self._lon[cap]
-        lat = self._lat[cap]
-
-        dlon,dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)], inverse=True)
-
-        sel_lon = np.abs(dlon) < (width/2. + pad_ra)
-        sel_lat = np.abs(dlat) < (height/2. + pad_dec)
-        sel = np.where(sel_lon & sel_lat)
-
-        matches = np.take(cap, sel[0])
-        return matches
-
-    def crop_box(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
-        """ Select objects in a rectangle and return a new catalogue object.
-
-        Inputs
-        ------
-        clon - center ra
-        clat - center dec
-        width - width (degrees)
-        height - height (degrees)
-        padding - add this padding to width and height (degrees)
-        orientation - (degrees about center)
-
-        Outputs
-        -------
-        catalogue
-        """
-        matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-        return self.__getitem__(matches)
-
-    def plot(self):
-        """ Create a Mollweide projected plot of the objects.
-
-        Inputs
-        ------
-        None
-
-        Outputs
-        ------
-        None
-        """
-
-        # Subsample a big catalogue
-        if len(self) > 10000:
-            index = np.arange(len(self))
-            index = np.random.choice(index,10000)
-            # Coordinates in radians
-            x = misc.torad(self.lon[index])
-            y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
-
-        # Setup healpix
-        hp.graticule()
-        hp.visufunc.projscatter(y, x, s=10., lw=0.0)
-
-class CartesianCatalogue(Catalogue):
-    """ """
-    def build_tree(self):
-        """ Initialize the data structure for fast spatial lookups.
-
-        Inputs
-        ------
-        None
-
-        Outputs
-        -------
-        None
-        """
-        self.lookup_tree = KDTree(np.transpose([self.lon, self.lat]))
+        xy = np.transpose([self._imagex, self._imagey])
+        self._lookup_tree = KDTree(xy)
 
     def query_disk(self, x, y, radius=1.):
         """ Find neighbors to a given point (ra, dec).
@@ -349,8 +175,6 @@ class CartesianCatalogue(Catalogue):
 
         matches = self.lookup_tree.query_radius(np.transpose([x,y]), radius)
         return matches
-
-    query_cap = query_disk
 
     def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
         """ Find objects in a rectangle.
@@ -396,6 +220,31 @@ class CartesianCatalogue(Catalogue):
         if len(results)==1:
             return results[0]
         return results
+
+
+    def plot(self):
+        """ Create a Mollweide projected plot of the objects.
+
+        Inputs
+        ------
+        None
+
+        Outputs
+        ------
+        None
+        """
+
+        # Subsample a big catalogue
+        if len(self) > 10000:
+            index = np.arange(len(self))
+            index = np.random.choice(index,10000)
+            # Coordinates in radians
+            x = misc.torad(self.lon[index])
+            y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
+
+        # Setup healpix
+        hp.graticule()
+        hp.visufunc.projscatter(y, x, s=10., lw=0.0)
 
 
 class CatalogueError(Exception):
