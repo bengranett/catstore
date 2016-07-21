@@ -2,49 +2,112 @@ import numpy as N
 import h5py
 
 import catalogue
+import vm.healpix_projection as HP
 
 
 class CatalogueStore(object):
-    """ Storage backend for catalogues. """
+    """ Storage backend for loading catalogues from disk.
 
-    def __init__(self, filename=None):
-        """ """
+    The catalogues support spatial queries using spherical coordinates. 
+    
+    Full-sky catalogues may be loaded in spatial chunks called zones only when needed so that the entire
+    catalogue is not stored in memory.
+    """
+
+    # Define sky partition mode constants
+    FULLSKY = 0
+    HEALPIX = 1
+
+    def __init__(self, filename=None, zone_resolution=2, zone_order=HP.NEST):
+        """ Initialize the catalogue backend. """
+        self.zone_resolution = zone_resolution
+        self.zone_order = zone_order
+        self.filename = filename
+
         if filename is not None:
-            self.store = self.load(filename)
+            self._datastore = self.load(filename)
+
+        self._hp_projector = HP.HealpixProjector(2**self.zone_resolution, self.hp_order)
+
+
+    def load(filename):
+        """ Load a catalogue from disk.  Multiple formats are supported to allow easy
+        conversion for preprocessing catalogues.
+
+        The file format is guessed from the extension.
+        """
+        if file.endswith("fits"):
+            self.load_fits(filename)
+        elif file.endswith("dat"):
+            self.load_ascii(filename)
+        elif file.endswith("hdf5") of file.endswith("pypelid"):
+            self.load_hdf5(filename)
+        else:
+            raise Exception("Unknown file format: %s"%filename)
 
     def load_hdf5(filename):
-        """ Load a catalogue store file. """
-        self.store = h5py.File(filename)
+        """ Load a pypelid catalogue store file. """
+        datastruct = h5py.File(filename)
+        self.partition_mode = datastruct['partition_mode']
+        self.zone_resolution = datastruct['zone_resolution']
+        self.zone_order = datastruct['zone_order']
+        self._datastore = datastruct
+        self.filename = datastruct.filename
+        self.name = datastruct.name
 
-    def load_fits(filename):
+    def load_fits(filename, names=None, fits_ext=1):
         """ Load a fits data file. """
-        raise Exception("Not implemented")
+        try:
+            data, fits_header = fitsio.read(filename, columns=names, ext=fits_ext, header=True)
+            name = self.header['EXTNAME']
+        except ValueError as e:
+            print e.message
+            raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
+
+        self._datastore = data
+        self.name = name
+        self.partition_mode = self.FULLSKY
+        self.zone_resolution = 0
+        self.zone_order = None
 
     def load_ascii(filename):
         """ Load data in ascii format """
         raise Exception("Not implemented")
 
-    def save(filename):
-        """ Construct and write a new catalogue store file. """
-        self.store = h5py.File(filename)
+    def write(filename):
+        """ Construct and write a new catalogue store file in pypelid format. """
+        pass
 
+    def index(self):
+        """ Generate the indices for the catalogue eg healpix zones. """
+        pass
 
-    def _retrieve_data(self, zones):
+    def _retrieve_zone(self, zones):
         """ Retrieve the data within the given zones."""
-        raise Exception("Not implemented")
-        # for zi in zones:
-        #     self._data_storage[str(zi)]
+        data = []
+        for zone in zones:
+            key = str(zone)
+            data.append(self._datastore[key])
+        data = N.vstack(data)
+        return data
 
     def _which_zones(self, lon, lat, radius):
-        """ Determine the zones that overlap the points (lon,lat) within the radius."""
-        raise Exception("Not implemented")
-        # pix = np.arange(self._healpix_projector.npix)
-        # grid = self._healpix_projector.pix2ang(pix)
-        # lookup_tree = KDTree(grid)
+        """ Determine which zones overlap the points (lon,lat) within the radius."""
 
-        # self._healpix_projector.ang2pix(lon, lat)
-
+        zones = self._healpix_projector.query_disc(lon, lat, radius)
         return zones
+
+    def _plant_tree(self, zone):
+        """ Generate a KD tree data structure for the given zone to allow fast
+        spatial queries.
+
+        """
+        data = self._retrieve_zone(zone)
+        # access longitude and latitude...
+        lon = data['lon']
+        lat = data['lat']
+        xyz = sphere.lonlat2xyz(lon, lat)
+        self._tree[zone] = KDTree(np.transpose(xyz))
 
     def query_cap(self, clon, clat, radius=1.):
         """ Find neighbors to a given point (clon, clat).
@@ -59,14 +122,14 @@ class CatalogueStore(object):
         -------
         indices of objects in selection
         """
-        zones = self._get_zones_of_interest(clon, clat, radius)
+        zones = self._which_zones(clon, clat, radius)
 
-        matches = []
+        matches = {}
 
         for zone_i in zones:
 
             if not self._trees.has_key(zone_i):
-                self._build_tree(zone_i)
+                self._plant_tree(zone_i)
 
             r = radius * np.pi/180
 
@@ -77,9 +140,9 @@ class CatalogueStore(object):
             else:
                 xyz = np.transpose(xyz)
 
-            matches.append(self._trees[zone_i].query_radius(xyz, r))
+            matches[zone_i] = self._trees[zone_i].query_radius(xyz, r)
 
-        return np.concatenate(matches)
+        return matches
 
     def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
         """ Find objects in a rectangle.
@@ -112,8 +175,8 @@ class CatalogueStore(object):
         return matches
 
 
-    def crop_box(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
-        """ Select objects in a rectangle and return a catalogue object.
+    def project_subcat(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0, transform=None):
+        """ Select objects in a rectangle and return a projected catalogue object.
 
         Inputs
         ------
@@ -129,4 +192,31 @@ class CatalogueStore(object):
         catalogue
         """
         matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-        return self.__getitem__(matches)
+        # return a new catalogue instance that contains the selected objects...
+        # return catalogue
+
+
+    def plot(self):
+        """ Create a Mollweide projected plot of the objects.
+
+        Inputs
+        ------
+        None
+
+        Outputs
+        ------
+        None
+        """
+
+        # Subsample a big catalogue
+        if len(self) > 10000:
+            index = np.arange(len(self))
+            index = np.random.choice(index,10000)
+            # Coordinates in radians
+            x = misc.torad(self.lon[index])
+            y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
+
+        # Setup healpix
+        hp.graticule()
+        hp.visufunc.projscatter(y, x, s=10., lw=0.0)
+
