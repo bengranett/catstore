@@ -10,11 +10,17 @@ logging.basicConfig(level=logging.DEBUG)
 def load(filename):
     """ """
     cat = catalogue_store.CatalogueStore(filename)
-    
-    stuff = cat.retrieve(45.,0.,width=20.,height=10.,orientation=20)
+    with cat:
+        stuff = cat.retrieve(45.,0.,width=20.,height=10.,orientation=20)
+        stuff2 = cat.retrieve(45.,10.,width=20.,height=10.,orientation=20)
 
     x,y = np.transpose(stuff['skycoord'])
     pylab.plot(x,y,".")
+
+    x,y = np.transpose(stuff2['skycoord'])
+    pylab.plot(x,y,".")
+
+
     pylab.show()
 
 if __name__=="__main__":

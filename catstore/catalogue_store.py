@@ -52,12 +52,25 @@ class CatalogueStore(object):
         self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
         self._datastore = None
 
+    def __enter__(self):
+        """ """
+        self._open_pypelid(self.filename)
+        return
+
+    def __exit__(self, type, value, traceback):
+        """ """
+        self._close_pypelid()
+
     def _open_pypelid(self, filename):
         """ Load a pypelid catalogue store file. """
-        h5file = filetools.hdf5_catalogue(filename, mode='r')
+        self.h5file = filetools.hdf5_catalogue(filename, mode='r')
         # access the data group
-        self._datastore = h5file.get_data()
-        return h5file
+        self._datastore = self.h5file.get_data()
+        return self.h5file
+
+    def _close_pypelid(self):
+        """ """
+        self.h5file.close()
 
     def write(self, filename):
         """ Construct and write a new catalogue store file in pypelid format. """
@@ -178,16 +191,14 @@ class CatalogueStore(object):
         """
         data_dict = {}
 
-        with self._open_pypelid(self.filename) as h5file:
+        matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
 
-            matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-
-            for zone, selection in matches.items():
-                data = self._retrieve_zone(zone)
-                for name,arr in data.items():
-                    if not name in data_dict:
-                        data_dict[name] = []
-                    data_dict[name].append(arr[:][selection])
+        for zone, selection in matches.items():
+            data = self._retrieve_zone(zone)
+            for name,arr in data.items():
+                if not name in data_dict:
+                    data_dict[name] = []
+                data_dict[name].append(arr[:][selection])
 
         for name in data_dict.keys():
             data_dict[name] = np.concatenate(data_dict[name])
