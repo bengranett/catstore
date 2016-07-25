@@ -22,51 +22,42 @@ class CatalogueStore(object):
     FULLSKY = 0
     HEALPIX = 1
 
-    def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING):
+    def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING,
+                    check_hash=True, require_hash=True, official_stamp='pypelid'):
         """ Initialize the catalogue backend. """
         self.filename = filename
         self._trees = {}
-        self._datasave = {}
 
         if filename is not None:
-            self.load_pypelid(filename)
+            self.init_pypelid_file(check_hash=check_hash, require_hash=require_hash, official_stamp=official_stamp)
             return
-
+            
         self.zone_resolution = zone_resolution
         self.zone_order = zone_order
         self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
 
-    def load_pypelid(self, filename, check_hash=True, require_hash=True, official_stamp='pypelid'):
+    def init_pypelid_file(self, check_hash=True, require_hash=True, official_stamp='pypelid'):
+        """ Check the input pypelid file and initialize. """
+        filetools.validate_hdf5_file(self.filename, check_hash=check_hash, require_hash=require_hash, 
+                                    official_stamp=official_stamp)
+
+        with filetools.hdf5_catalogue(self.filename, mode='r') as h5file:
+            # import all attributes in the file.
+            self.metadata = {}
+            for key,value in h5file.get_attributes().items():
+                self.metadata[key] = value
+
+            self.zone_resolution = self.metadata['zone_resolution']
+            self.zone_order = self.metadata['zone_order']
+        self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
+        self._datastore = None
+
+    def _open_pypelid(self, filename):
         """ Load a pypelid catalogue store file. """
-
-        # test that the pypelid stamp is in the header
-        filetools.validate_hdf5_stamp(filename, official_stamp)
-
-        # test that the hash matches
-        if check_hash:
-            try:
-                filetools.validate_hdf5_hash(filename)
-            except filetools.FileValidationError:
-                logging.warning("%s: hash validation failed.", filename)
-                if require_hash:
-                    raise
-
         h5file = filetools.hdf5_catalogue(filename, mode='r')
-
-        # import all attributes in the file.
-        self.metadata = {}
-        for key,value in h5file.get_attributes().items():
-            self.metadata[key] = value
-
         # access the data group
         self._datastore = h5file.get_data()
-
-        self.zone_resolution = self.metadata['zone_resolution']
-        self.zone_order = self.metadata['zone_order']
-        self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
-
-        logging.debug("Loaded %s: found %i data zones", filename, len(self._datastore.keys()))
-
+        return h5file
 
     def write(self, filename):
         """ Construct and write a new catalogue store file in pypelid format. """
@@ -100,7 +91,6 @@ class CatalogueStore(object):
 
         xyz = sphere.lonlat2xyz(lon, lat)
         self._trees[zone] = KDTree(np.transpose(xyz))
-        self._datasave[zone] = np.transpose([lon,lat])
 
     def _query_cap(self, clon, clat, radius=1.):
         """ Find neighbors to a given point (clon, clat).
@@ -186,15 +176,18 @@ class CatalogueStore(object):
         -------
         structured array
         """
-        matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-
         data_dict = {}
-        for zone, selection in matches.items():
-            data = self._retrieve_zone(zone)
-            for name,arr in data.items():
-                if not name in data_dict:
-                    data_dict[name] = []
-                data_dict[name].append(arr[:][selection])
+
+        with self._open_pypelid(self.filename) as h5file:
+
+            matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
+
+            for zone, selection in matches.items():
+                data = self._retrieve_zone(zone)
+                for name,arr in data.items():
+                    if not name in data_dict:
+                        data_dict[name] = []
+                    data_dict[name].append(arr[:][selection])
 
         for name in data_dict.keys():
             data_dict[name] = np.concatenate(data_dict[name])
