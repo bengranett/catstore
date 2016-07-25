@@ -1,9 +1,13 @@
-import numpy as N
-import h5py
+import numpy as np
 
 import catalogue
 import pypelid.vm.healpix_projection as HP
+import pypelid.utils.filetools as filetools
+import pypelid.utils.misc as misc
+import pypelid.utils.sphere as sphere
+from sklearn.neighbors import KDTree
 
+import logging
 
 class CatalogueStore(object):
     """ Storage backend for loading catalogues from disk.
@@ -20,64 +24,49 @@ class CatalogueStore(object):
 
     def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING):
         """ Initialize the catalogue backend. """
-        self.zone_resolution = zone_resolution
-        self.zone_order = zone_order
         self.filename = filename
+        self._trees = {}
+        self._datasave = {}
 
         if filename is not None:
-            self._datastore = self.load(filename)
-
-        self._hp_projector = HP.HealpixProjector(2**self.zone_resolution, self.hp_order)
-
-
-    def load(self, filename):
-        """ Load a catalogue from disk.  Multiple formats are supported to allow easy
-        conversion for preprocessing catalogues.
-
-        The file format is guessed from the extension.
-        """
-
-        # Sequentially try to load instead
-        if filename.endswith("fits"):
-            self.load_fits(filename)
-        elif filename.endswith("dat"):
-            self.load_ascii(filename)
-        elif filename.endswith("hdf5") or filename.endswith("pypelid"):
             self.load_pypelid(filename)
-        else:
-            raise Exception("Unknown file format: %s"%filename)
+            return
 
-    def load_pypelid(self, filename):
+        self.zone_resolution = zone_resolution
+        self.zone_order = zone_order
+        self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
+
+    def load_pypelid(self, filename, check_hash=True, require_hash=True, official_stamp='pypelid'):
         """ Load a pypelid catalogue store file. """
 
         # test that the pypelid stamp is in the header
+        filetools.validate_hdf5_stamp(filename, official_stamp)
 
-        datastruct = h5py.File(filename)
-        self.partition_mode = datastruct['partition_mode']
-        self.zone_resolution = datastruct['zone_resolution']
-        self.zone_order = datastruct['zone_order']
-        self._datastore = datastruct
-        self.filename = datastruct.filename
-        self.name = datastruct.name
+        # test that the hash matches
+        if check_hash:
+            try:
+                filetools.validate_hdf5_hash(filename)
+            except filetools.FileValidationError:
+                logging.warning("%s: hash validation failed.", filename)
+                if require_hash:
+                    raise
 
-    def load_fits(self, filename, names=None, fits_ext=1):
-        """ Load a fits data file. """
-        try:
-            data, fits_header = fitsio.read(filename, columns=names, ext=fits_ext, header=True)
-            name = self.header['EXTNAME']
-        except ValueError as e:
-            print e.message
-            raise Exception("The input catalogue %s is in the wrong format. Run prepcat first!"%filename)
+        h5file = filetools.hdf5_catalogue(filename, mode='r')
 
-        self._datastore = data
-        self.name = name
-        self.partition_mode = self.FULLSKY
-        self.zone_resolution = 0
-        self.zone_order = None
+        # import all attributes in the file.
+        self.metadata = {}
+        for key,value in h5file.get_attributes().items():
+            self.metadata[key] = value
 
-    def load_ascii(self, filename):
-        """ Load data in ascii format """
-        raise Exception("Not implemented")
+        # access the data group
+        self._datastore = h5file.get_data()
+
+        self.zone_resolution = self.metadata['zone_resolution']
+        self.zone_order = self.metadata['zone_order']
+        self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
+
+        logging.debug("Loaded %s: found %i data zones", filename, len(self._datastore.keys()))
+
 
     def write(self, filename):
         """ Construct and write a new catalogue store file in pypelid format. """
@@ -87,19 +76,15 @@ class CatalogueStore(object):
         """ Generate the indices for the catalogue eg healpix zones. """
         pass
 
-    def _retrieve_zone(self, zones):
+    def _retrieve_zone(self, zone):
         """ Retrieve the data within the given zones."""
-        data = []
-        for zone in zones:
-            key = str(zone)
-            data.append(self._datastore[key])
-        data = N.vstack(data)
-        return data
+        key = str(zone)
+        return self._datastore[key]
 
     def _which_zones(self, lon, lat, radius):
         """ Determine which zones overlap the points (lon,lat) within the radius."""
-
-        zones = self._healpix_projector.query_disc(lon, lat, radius)
+        zones = self._hp_projector.query_disc(lon, lat, radius)
+        logging.debug("querying %f,%f... zones found: %s",lon,lat,zones)
         return zones
 
     def _plant_tree(self, zone):
@@ -109,12 +94,15 @@ class CatalogueStore(object):
         """
         data = self._retrieve_zone(zone)
         # access longitude and latitude...
-        lon = data['lon']
-        lat = data['lat']
-        xyz = sphere.lonlat2xyz(lon, lat)
-        self._tree[zone] = KDTree(np.transpose(xyz))
+        lon,lat = np.transpose(data['skycoord'][:])
 
-    def query_cap(self, clon, clat, radius=1.):
+        logging.debug("building tree %s n=%i",zone,len(lon))
+
+        xyz = sphere.lonlat2xyz(lon, lat)
+        self._trees[zone] = KDTree(np.transpose(xyz))
+        self._datasave[zone] = np.transpose([lon,lat])
+
+    def _query_cap(self, clon, clat, radius=1.):
         """ Find neighbors to a given point (clon, clat).
 
         Inputs
@@ -145,11 +133,11 @@ class CatalogueStore(object):
             else:
                 xyz = np.transpose(xyz)
 
-            matches[zone_i] = self._trees[zone_i].query_radius(xyz, r)
+            matches[zone_i] = self._trees[zone_i].query_radius(xyz, r)[0]
 
         return matches
 
-    def query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
+    def _query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
         """ Find objects in a rectangle.
         Inputs
         ------
@@ -165,22 +153,24 @@ class CatalogueStore(object):
         indices of objects in selection
         """
         r = np.sqrt(width**2 + height**2)/2.
-        cap = self.query_cap(clon,clat,r)[0]
+        match_dict = self._query_cap(clon,clat,r)
 
-        lon = self._lon[cap]
-        lat = self._lat[cap]
+        selection_dict = {}
+        for zone,matches in match_dict.items():
+            data = self._retrieve_zone(zone)
+            lon,lat = np.transpose(data['skycoord'][:][matches])
+            dlon,dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)], inverse=True)
 
-        dlon,dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)], inverse=True)
+            sel_lon = np.abs(dlon) < (width/2. + pad_ra)
+            sel_lat = np.abs(dlat) < (height/2. + pad_dec)
+            sel = np.where(sel_lon & sel_lat)
 
-        sel_lon = np.abs(dlon) < (width/2. + pad_ra)
-        sel_lat = np.abs(dlat) < (height/2. + pad_dec)
-        sel = np.where(sel_lon & sel_lat)
+            selection_dict[zone] = np.take(matches, sel[0])
 
-        matches = np.take(cap, sel[0])
-        return matches
+        return selection_dict
 
 
-    def project_subcat(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0, transform=None):
+    def retrieve(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0, transform=None):
         """ Select objects in a rectangle and return a projected catalogue object.
 
         Inputs
@@ -194,11 +184,25 @@ class CatalogueStore(object):
 
         Outputs
         -------
-        catalogue
+        structured array
         """
-        matches = self.query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-        # return a new catalogue instance that contains the selected objects...
-        # return catalogue
+        matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
+
+        data_dict = {}
+        for zone, selection in matches.items():
+            data = self._retrieve_zone(zone)
+            for name,arr in data.items():
+                if not name in data_dict:
+                    data_dict[name] = []
+                data_dict[name].append(arr[:][selection])
+
+        for name in data_dict.keys():
+            data_dict[name] = np.concatenate(data_dict[name])
+
+        # construct a structured array
+        structured_arr = misc.dict_to_structured_array(data_dict)
+
+        return structured_arr
 
 
     def plot(self):
