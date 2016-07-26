@@ -213,6 +213,11 @@ class CatalogueStore(object):
         for name in data_dict.keys():
             data_dict[name] = np.concatenate(data_dict[name])
 
+        if transform is not None:
+            lon,lat = np.transpose(data_dict['skycoord'])
+            ximage,yimage = transform(lon, lat)
+            data_dict['imagecoord'] = np.transpose([ximage,yimage])
+
         # construct a structured array
         structured_arr = misc.dict_to_structured_array(data_dict)
 
