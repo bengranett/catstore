@@ -55,7 +55,7 @@ class CatalogueStore(object):
     def __enter__(self):
         """ """
         self._open_pypelid(self.filename)
-        return
+        return self
 
     def __exit__(self, type, value, traceback):
         """ """
