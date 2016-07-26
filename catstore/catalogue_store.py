@@ -5,7 +5,6 @@ import pypelid.vm.healpix_projection as HP
 import pypelid.utils.filetools as filetools
 import pypelid.utils.misc as misc
 import pypelid.utils.sphere as sphere
-from sklearn.neighbors import KDTree
 
 import logging
 
@@ -91,20 +90,6 @@ class CatalogueStore(object):
         logging.debug("querying %f,%f... zones found: %s",lon,lat,zones)
         return zones
 
-    def _plant_tree(self, zone):
-        """ Generate a KD tree data structure for the given zone to allow fast
-        spatial queries.
-
-        """
-        data = self._retrieve_zone(zone)
-        # access longitude and latitude...
-        lon,lat = np.transpose(data['skycoord'][:])
-
-        logging.debug("building tree %s n=%i",zone,len(lon))
-
-        xyz = sphere.lonlat2xyz(lon, lat)
-        self._trees[zone] = KDTree(np.transpose(xyz))
-
     def _query_cap(self, clon, clat, radius=1.):
         """ Find neighbors to a given point (clon, clat).
 
@@ -118,25 +103,27 @@ class CatalogueStore(object):
         -------
         indices of objects in selection
         """
-        zones = self._which_zones(clon, clat, radius)
+
+        mu_thresh = np.cos(radius * np.pi/180)
+
+        xyz = sphere.lonlat2xyz(clon, clat)
+
+        if misc.is_number(xyz[0]):
+            xyz = np.transpose(xyz).reshape(1,-1)
+        else:
+            xyz = np.transpose(xyz)
 
         matches = {}
+        for zone_i in self._which_zones(clon, clat, radius):
+            data = self._retrieve_zone(zone_i)
+            # access longitude and latitude...
+            lon,lat = np.transpose(data['skycoord'][:])
+            cat_xyz = sphere.lonlat2xyz(lon, lat)
 
-        for zone_i in zones:
-
-            if not self._trees.has_key(zone_i):
-                self._plant_tree(zone_i)
-
-            r = radius * np.pi/180
-
-            xyz = sphere.lonlat2xyz(clon, clat)
-
-            if misc.is_number(xyz[0]):
-                xyz = np.transpose(xyz).reshape(1,-1)
-            else:
-                xyz = np.transpose(xyz)
-
-            matches[zone_i] = self._trees[zone_i].query_radius(xyz, r)[0]
+            mu = np.dot(xyz, cat_xyz)
+            cut = mu > mu_thresh
+            cut = np.sum(cut, axis=0)          # OR operation along the first dimension
+            matches[zone_i] = np.where(cut)
 
         return matches
 
