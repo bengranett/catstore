@@ -90,6 +90,15 @@ class CatalogueStore(object):
         logging.debug("querying %f,%f... zones found: %s",lon,lat,zones)
         return zones
 
+    def get_zones(self):
+        """ Return a list of zone identifiers. """
+        return self._datastore.keys()
+
+    def get_data(self):
+        """ A generating function that returns the hdf5 groups."""
+        for zone in self.get_zones():
+            yield self._datastore[zone]
+
     def _query_cap(self, clon, clat, radius=1.):
         """ Find neighbors to a given point (clon, clat).
 
@@ -211,27 +220,44 @@ class CatalogueStore(object):
         return structured_arr
 
 
-    def plot(self):
+    def plot(self, plot_every=10, s=5., lw=0., cmap='jet'):
         """ Create a Mollweide projected plot of the objects.
 
-        Inputs
-        ------
-        None
+        Uses healpy for the spherical projection and matplotlib for the colormap.
 
-        Outputs
-        ------
-        None
+        Parameters
+        ----------
+        plot_every : int
+                Downsample the points before plotting.
+        s : float
+                Marker size
+        lw : float
+                Line width
+        cmap : colormap
+                A matplotlib colormap.
         """
+        from matplotlib.cm import ScalarMappable
+        from matplotlib.colors import Normalize
+        import healpy as hp
 
-        # Subsample a big catalogue
-        if len(self) > 10000:
-            index = np.arange(len(self))
-            index = np.random.choice(index,10000)
-            # Coordinates in radians
-            x = misc.torad(self.lon[index])
-            y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
+        sc = ScalarMappable(Normalize(0,len(self.get_zones())), cmap=cmap)
 
-        # Setup healpix
+        # initialize a mollweide map
+        hp.mollview(np.zeros(12)+float('nan'), cbar=False)
+        for data in self.get_data():
+            lon,lat = np.transpose(data['skycoord'][:])
+
+            # select a subset of points
+            if plot_every>1:
+                sel = np.random.choice(len(lon),len(lon)//plot_every)
+                lon = lon[sel]
+                lat = lat[sel]
+
+            # color points based upon zone index
+            c=sc.to_rgba(int(data.name.split("/")[-1]))
+
+            # plot
+            hp.visufunc.projscatter(lon, lat, c=c, s=s, lw=lw, lonlat=True)
         hp.graticule()
-        hp.visufunc.projscatter(y, x, s=10., lw=0.0)
+
 
