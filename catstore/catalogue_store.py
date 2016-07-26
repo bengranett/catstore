@@ -176,18 +176,28 @@ class CatalogueStore(object):
     def retrieve(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0, transform=None):
         """ Select objects in a rectangle and return a projected catalogue object.
 
-        Inputs
-        ------
-        clon - center ra
-        clat - center dec
-        width - width (degrees)
-        height - height (degrees)
-        padding - add this padding to width and height (degrees)
-        orientation - (degrees about center)
+        Parameters
+        ----------
+        clon : float
+            center ra
+        clat : float
+            center dec
+        width : float
+            rectangle width (degrees)
+        height : float
+            rectangle height (degrees)
+        pad_ra : float
+            add this padding to width (degrees)
+        pad_dec : float
+            add this padding to dec (degrees)
+        orientation : float
+            rotation angle (degrees about center from North increasing toward the East)
+        transform : function
+            a function that will be called to map sky coordinates to cartesian coordinates.
 
-        Outputs
+        Returns
         -------
-        structured array
+        ndarray : catalogue stored as a numpy structured array
         """
         data_dict = {}
 
