@@ -255,6 +255,13 @@ class HDF5Catalogue(object):
         if not 'count' in group.attrs:
             group.attrs['count'] = 0
 
+        if nmax is not None and 'nmax' in group.attrs:
+            if group.attrs['nmax'] != nmax:
+                raise Exception("Cannot update group %s because supplied nmax is not consistent with group attributes."%group_name)
+
+        if nmax is not None and 'nmax' not in group.attrs:
+            group.attrs['nmax'] = nmax
+
         column_info = {}
 
         length_check = None # this variable will be used to ensure that all data arrays have the same length.
@@ -278,12 +285,16 @@ class HDF5Catalogue(object):
                 dim = group.attrs['count']
                 if not self.preallocate_file: group[name].resize(dim+arr.shape[0], axis=0)
                 if dim+len(arr) > group[name].shape[0]:
-                    raise Exception("Allocated dataset is too small to fit the input array.")
+                    raise Exception("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
                 group[name][dim:dim+len(arr)] = arr
                 #logging.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
             else:
+                # catch the case when a new dataset is added that was not preallocated, but nmax of the group is already known.
+                if nmax is None and 'nmax' in group.attrs:
+                    nmax = group.attrs['nmax']
+
                 if self.preallocate_file and nmax is None:
-                    raise Exception("nmax must be specified to preallocate the hdf5 file.")
+                    raise Exception("Cannot create dataset %s.%s because nmax must be specified to preallocate the hdf5 file."%(group_name,name))
 
                 # otherwise create a new dataset
                 if self.chunk_size is None:
@@ -297,7 +308,7 @@ class HDF5Catalogue(object):
                 if self.preallocate_file:
                     group.create_dataset(name, data=np.zeros(maxshape,dtype=arr.dtype), maxshape=maxshape, chunks=chunkshape, **self.compression)
                     if len(arr) > group[name].shape[0]:
-                        raise Exception("Allocated dataset is too small to fit the input array.")
+                        raise Exception("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
                     group[name][:len(arr)] = arr
                 else:
                     group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.compression)
