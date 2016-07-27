@@ -200,8 +200,10 @@ class HDF5Catalogue(object):
         for i, name in enumerate(column_names):
             data[name] = np.array([], dtype=dtypes[i])
 
-        group_names = misc.ensurelist(group_names)
-        nmax = misc.ensurelist(nmax)
+        if not misc.check_is_iterable(group_names):
+            group_names = [group_names]
+        if not misc.check_is_iterable(nmax):
+            nmax = [nmax]
 
         for i, group in enumerate(group_names):
             self.update_data(data, group, nmax[i])
@@ -399,12 +401,15 @@ class HDF5Catalogue(object):
                     desc = f[self.DESCRIPTION_GROUP].attrs[name]
                 except:
                     desc = ""
-                firstline = "{:^16s}|{:^10s}|{:^10s}| ".format(name,unit,info)
-                pad = len(firstline)
+                message = "{:^16s}|{:^10s}|{:^10s}| ".format(name,unit,info)
+                pad = len(message)
                 desc_lines = textwrap.wrap(desc,self.headerlinewidth-pad)
-                message = firstline + desc_lines[0] + "\n"
-                for line in desc_lines[1:]:
-                    message += " "*pad + line + "\n"
+                if len(desc_lines)>0:
+                    message += desc_lines[0] + "\n"
+                    for line in desc_lines[1:]:
+                        message += " "*pad + line + "\n"
+                else:
+                    message += "\n"
                 header.write(message)
         header.write(self.horizline())
 
