@@ -230,10 +230,10 @@ class HDF5Catalogue(object):
 
             # Identify all the corresponding row indices
             # optimisation comment: This adds len(np.unique(group_list)) scans to N
-            index = np.where(group_arr == zone)
+            index, = np.where(group_arr == zone)
 
             # Call the update_data function to add to the group
-            zond_data = {}
+            zone_data = {}
             for col in data.keys():
             	zone_data[col] = data[col][index]
 
