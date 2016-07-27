@@ -20,6 +20,12 @@ class CatalogueStore(object):
     # Define sky partition mode constants
     FULLSKY = 0
     HEALPIX = 1
+    _required_attributes = {'partition_scheme': ('HEALPIX',),
+                            'zone_resolution': range(12),
+                            'zone_order': (HP.RING,HP.NEST)
+                            }
+
+    
 
     def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING,
                     check_hash=True, require_hash=True, official_stamp='pypelid'):
@@ -45,6 +51,15 @@ class CatalogueStore(object):
             self.metadata = {}
             for key,value in h5file.get_attributes().items():
                 self.metadata[key] = value
+
+            # ensure that required attributes are there with acceptable values.
+            for key, options in self._required_attributes.items():
+                try:
+                    assert(self.metadata[key] in options)
+                except KeyError:
+                    raise Exception("Cannot load %s: attribute is missing: %s"%(self.filename,key))
+                except AssertionError:
+                    raise Exception("Cannot load %s: invalid attribute: %s:%s (expected %s)"%(self.filename,key,self.metadata[key],options))
 
             self.zone_resolution = self.metadata['zone_resolution']
             self.zone_order = self.metadata['zone_order']
@@ -82,6 +97,8 @@ class CatalogueStore(object):
     def _retrieve_zone(self, zone):
         """ Retrieve the data within the given zones."""
         key = str(zone)
+        if key not in self._datastore:
+            raise ZoneDoesNotExist()
         return self._datastore[key]
 
     def _which_zones(self, lon, lat, radius):
@@ -124,7 +141,11 @@ class CatalogueStore(object):
 
         matches = {}
         for zone_i in self._which_zones(clon, clat, radius):
-            data = self._retrieve_zone(zone_i)
+            try:
+                data = self._retrieve_zone(zone_i)
+            except ZoneDoesNotExist:
+                continue
+                
             # access longitude and latitude...
             lon,lat = np.transpose(data['skycoord'][:])
             cat_xyz = sphere.lonlat2xyz(lon, lat)
@@ -261,3 +282,5 @@ class CatalogueStore(object):
         hp.graticule()
 
 
+class ZoneDoesNotExist(Exception):
+    pass
