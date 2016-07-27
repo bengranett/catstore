@@ -489,3 +489,9 @@ class HDF5Catalogue(object):
             print "%s%s%s: %s"%("   "*level, pre, key, s)
             self.show(value, pre+"\__",level+1)
 
+
+class FileValidationError(Exception):
+    pass
+class WriteError(Exception):
+    pass
+
