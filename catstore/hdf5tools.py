@@ -206,6 +206,37 @@ class HDF5Catalogue(object):
         for i, group in enumerate(group_names):
             self.update_data(data, group, nmax[i])
 
+    def update(self, group_arr, data):
+        """ Update multiple groups.
+
+        Parameters
+        ----------
+        group_arr : np.ndarray
+            a column corresponding in length to the number of rows in data
+            giving a rule how to distribute the objects into the HDF5 groups
+        data : dict
+            the data columns given as dictionary entries with columns names as keys
+
+        Returns
+        ------
+        None
+        """
+
+        # Loop over all the unique zone identifiers in the group list
+        # optimisation comment: This is N=1 scan of the data column
+        for zone in np.unique(group_arr):
+
+            # Identify all the corresponding row indices
+            # optimisation comment: This adds len(np.unique(group_list)) scans to N
+            index = np.where(group_arr == zone)
+
+            # Call the update_data function to add to the group
+            zond_data = {}
+            for col in data.keys():
+            	zone_data[col] = data[col][index]
+
+            # Now update the group - this is uncertain if the groups don't exist
+            self.update_data(zone_data, zone)
 
     def update_data(self, group_data, group_name=0, nmax=None):
         """ Add catalogue data belonging to a single group.
