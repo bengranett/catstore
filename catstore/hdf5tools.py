@@ -110,7 +110,7 @@ def validate_hdf5_file(filename, check_hash=True, require_hash=True, official_st
                 raise
 
 
-class hdf5_catalogue(object):
+class HDF5Catalogue(object):
     """ """
     # these are reserved group names
 
@@ -159,7 +159,7 @@ class hdf5_catalogue(object):
 
     def __exit__(self, type, value, traceback):
         """ ensure the hdf5 file is closed. """
-        self.storage.close()
+        self.close()
 
     def get_attributes(self):
         """ """
@@ -181,9 +181,35 @@ class hdf5_catalogue(object):
         for key, value in attrs.items():
             self.storage.attrs[key] = value
 
+    def preallocate_groups(self, group_names, nmax, column_names, dtypes):
+        """ Create groups containing preallocated datasets.
+
+        Parameters
+        ----------
+        group_names : int
+            Names of groups to create (may be a single name or a list of names)
+        nmax : int
+            Number of data rows in the group (may be a single int or a list corresponding to group_names)
+        column_names : str list
+            List of column names to be used when creating datasets.
+        dtypes : type string of object
+            List of dtype objects that are recognized by numpy with same length as column_names
+        """
+        # create an empty dataset with the given dtype
+        data = {}
+        for i, name in enumerate(column_names):
+            data[name] = np.array([], dtype=dtypes[i])
+
+        group_names = misc.ensurelist(group_names)
+        nmax = misc.ensurelist(nmax)
+
+        for i, group in enumerate(group_names):
+            self.update_data(data, group, nmax[i])
+
+
     def update_data(self, group_data, group_name=0, nmax=None):
         """ Add catalogue data belonging to a single group.
-        group_data - structured array
+        group_data - dictionary
         group_name - default 0
         nmax - maximum number of objects in the group.  Only used if preallocate_file is enabled.
         """
@@ -202,7 +228,13 @@ class hdf5_catalogue(object):
 
         length_check = None # this variable will be used to ensure that all data arrays have the same length.
 
-        for name, arr in group_data.items():  # loop through column names
+        try:
+            column_names = group_data.keys()
+        except AttributeError:
+            column_names = group_data.dtype.names
+
+        for name in column_names:  # loop through column names
+            arr = group_data[name]
 
             # Do a check of the length of the data array.
             if length_check is not None:

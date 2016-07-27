@@ -2,7 +2,7 @@ import numpy as np
 
 import catalogue
 import pypelid.vm.healpix_projection as HP
-import pypelid.utils.filetools as filetools
+import pypelid.utils.hdf5tools as hdf5tools
 import pypelid.utils.misc as misc
 import pypelid.utils.sphere as sphere
 
@@ -37,10 +37,10 @@ class CatalogueStore(object):
 
     def init_pypelid_file(self, check_hash=True, require_hash=True, official_stamp='pypelid'):
         """ Check the input pypelid file and initialize. """
-        filetools.validate_hdf5_file(self.filename, check_hash=check_hash, require_hash=require_hash, 
+        hdf5tools.validate_hdf5_file(self.filename, check_hash=check_hash, require_hash=require_hash, 
                                     official_stamp=official_stamp)
 
-        with filetools.hdf5_catalogue(self.filename, mode='r') as h5file:
+        with hdf5tools.HDF5Catalogue(self.filename, mode='r') as h5file:
             # import all attributes in the file.
             self.metadata = {}
             for key,value in h5file.get_attributes().items():
@@ -62,7 +62,7 @@ class CatalogueStore(object):
 
     def _open_pypelid(self, filename):
         """ Load a pypelid catalogue store file. """
-        self.h5file = filetools.hdf5_catalogue(filename, mode='r')
+        self.h5file = hdf5tools.HDF5Catalogue(filename, mode='r')
         # access the data group
         self._datastore = self.h5file.get_data()
         return self.h5file
