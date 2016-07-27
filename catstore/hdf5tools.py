@@ -124,7 +124,7 @@ class HDF5Catalogue(object):
 
     def __init__(self, filename, mode='a', chunk_size=1024, hash_length=32, header_bytes=4096, stamp='pypelid', 
                 hashit=True, hash_info_len=1, preallocate_file=False, 
-                compression={'compression':'lzf','shuffle':True,'fletcher32':True}):
+                compression={}):
         """     
         filename - name of file to operate on
         chunk_size - number of elements in chunk (should correspond to 1KB to 1MB)
