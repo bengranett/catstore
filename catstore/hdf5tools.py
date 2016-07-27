@@ -245,8 +245,6 @@ class HDF5Catalogue(object):
         nmax - maximum number of objects in the group.  Only used if preallocate_file is enabled.
         """
         if self.readonly: raise WriteError("File loaded in read-only mode.")
-        if self.preallocate_file and nmax is None:
-            raise Exception("nmax must be specified to preallocate the hdf5 file.")
         group_name = '%s/%s'%(self.DATA_GROUP, group_name)
 
         group = self.storage.require_group(group_name)
@@ -282,6 +280,9 @@ class HDF5Catalogue(object):
                 group[name][dim:dim+len(arr)] = arr
                 #logging.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
             else:
+                if self.preallocate_file and nmax is None:
+                    raise Exception("nmax must be specified to preallocate the hdf5 file.")
+
                 # otherwise create a new dataset
                 if self.chunk_size is None:
                     chunkshape = None
@@ -304,7 +305,11 @@ class HDF5Catalogue(object):
                 self.column_count[name] = 0
             self.column_count[name] += len(arr)
 
-            dim = arr.size / len(arr)
+            # determine the number of elements per data row if 2 dimensional
+            if len(arr.shape) <= 1:
+                dim = len(arr.shape)
+            else:
+                dim = np.prod(arr.shape[1:])
 
             column_info[name] = "%i %s"%(dim, arr.dtype)
 
@@ -312,13 +317,6 @@ class HDF5Catalogue(object):
         group.attrs['count'] += len(arr)
 
         self.update_metagroup(self.COLUMNS_GROUP, column_info)
-
-    def bulk_update_data(self, data):
-        """Add catalogue data to the HDF5 file.
-        data - dictionary structure: each key is a zone id and the vaue is the structured array holding the data.
-        """
-        for group_name, group_data in data.items():
-            self.update_data(group_data, group_name=group_name)
 
     def update_metagroup(self, group_name, attributes, **attrs):
         """ Create a group to store metadata.
