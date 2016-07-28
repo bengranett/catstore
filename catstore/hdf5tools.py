@@ -334,7 +334,11 @@ class HDF5Catalogue(object):
             else:
                 dim = np.prod(arr.shape[1:])
 
-            column_info[name] = "%i %s"%(dim, arr.dtype)
+            try:
+                dtype_string = str(arr.dtype[0])
+            except KeyError:
+                dtype_string = str(arr.dtype)
+            column_info[name] = "%i %s"%(dim, dtype_string+"bla"*20)
 
         # update the count attribute with the length of the data arrays
         group.attrs['count'] += len(arr)
