@@ -370,6 +370,10 @@ class HDF5Catalogue(object):
         for key,value in attrs.items():
             group.attrs[key] = value
 
+    def get_metagroup(self, group_name):
+        """ """
+        return self.storage[group_name].attrs
+
     def update_units(self, attributes, **attrs):
         """ Update the units metadata group. """
         self.update_metagroup(self.UNITS_GROUP, attributes, **attrs)
@@ -377,6 +381,19 @@ class HDF5Catalogue(object):
     def update_description(self, attributes, **attrs):
         """ Update the description metadata group. """
         self.update_metagroup(self.DESCRIPTION_GROUP, attributes, **attrs)
+
+    def get_units(self):
+        """ Retrieve the units attributes """
+        return self.get_metagroup(self.UNITS_GROUP)
+
+    def get_description(self):
+        """ Retrieve the description attributes """
+        return self.get_metagroup(self.DESCRIPTION_GROUP)
+
+    def get_columns(self):
+        """ Retrieve the columns attributes """
+        return self.get_metagroup(self.COLUMNS_GROUP)
+
 
     def close(self):
         """ Write the HDF5 data to disk and then insert the human-readable header."""
