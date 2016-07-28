@@ -216,6 +216,11 @@ class HDF5Catalogue(object):
             nmax = [nmax]
 
         for i, group in enumerate(group_names):
+            try:
+                self.get_data_group(group)
+                raise Exception("Attempted to pre-allocate a group that already exists.")
+            except KeyError:
+                pass
             self.update_data(data, group, nmax[i])
 
     def update(self, group_arr, data):
