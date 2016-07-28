@@ -196,10 +196,10 @@ class HDF5Catalogue(object):
         # create an empty dataset with the given dtype
         if column_names is not None:
             if dim is None:
-                dim = np.ones(len(column_names))
+                dim = np.ones(len(column_names), dtype=int)
             dtypes_list = []
             for i, name in enumerate(column_names):
-                dtypes_list.append(np.dtype([(name, dtypes[i], dim)]))
+                dtypes_list.append(np.dtype([(name, dtypes[i], dim[i])]))
         else:
             # expect to find a list of dtype compatible tuples
             # construct dtype objects
