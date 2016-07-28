@@ -430,8 +430,10 @@ class HDF5Catalogue(object):
                 except:
                     desc = ""
                 message = "{:^16s}|{:^10s}|{:^10s}| ".format(name,unit,info)
-                pad = len(message)
+                pad = min(self.headerlinewidth//2, len(message))
                 desc_lines = textwrap.wrap(desc,self.headerlinewidth-pad)
+                if len(message) + len(desc_lines[0]) > self.headerlinewidth:
+                    message += "\n"+" "*pad  # go to next line.
                 if len(desc_lines)>0:
                     message += desc_lines[0] + "\n"
                     for line in desc_lines[1:]:
