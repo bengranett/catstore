@@ -351,7 +351,7 @@ class HDF5Catalogue(object):
                 dtype_string = str(arr.dtype[0])
             except KeyError:
                 dtype_string = str(arr.dtype)
-            column_info[name] = "%i %s"%(dim, dtype_string+"bla"*20)
+            column_info[name] = "%i %s"%(dim, dtype_string)
 
         # update the count attribute with the length of the data arrays
         group.attrs['count'] += len(arr)
@@ -449,9 +449,9 @@ class HDF5Catalogue(object):
                 message = "{:^16s}|{:^10s}|{:^10s}| ".format(name,unit,info)
                 pad = min(self.headerlinewidth//2, len(message))
                 desc_lines = textwrap.wrap(desc,self.headerlinewidth-pad)
-                if len(message) + len(desc_lines[0]) > self.headerlinewidth:
-                    message += "\n"+" "*pad  # go to next line.
                 if len(desc_lines)>0:
+                    if len(message) + len(desc_lines[0]) > self.headerlinewidth:
+                        message += "\n"+" "*pad  # go to next line.
                     message += desc_lines[0] + "\n"
                     for line in desc_lines[1:]:
                         message += " "*pad + line + "\n"
