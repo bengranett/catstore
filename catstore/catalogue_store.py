@@ -24,8 +24,7 @@ class CatalogueStore(object):
                             'zone_resolution': range(12),
                             'zone_order': (HP.RING,HP.NEST)
                             }
-
-    
+    _required_columns = ('skycoord',)
 
     def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING,
                     check_hash=True, require_hash=True, official_stamp='pypelid'):
@@ -63,6 +62,15 @@ class CatalogueStore(object):
 
             self.zone_resolution = self.metadata['zone_resolution']
             self.zone_order = self.metadata['zone_order']
+
+            # ensure that required datasets are there
+            for column_name in self._required_columns:
+                try:
+                    if column_name not in h5file.get_columns():
+                        raise Exception("Cannot load %s: data column is missing: %s"%(self.filename, column_name))
+                except KeyError:
+                        raise Exception("Cannot load %s: column description group is missing"%(self.filename))
+
         self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
         self._datastore = None
 
