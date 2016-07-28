@@ -167,7 +167,11 @@ class HDF5Catalogue(object):
 
     def get_data(self):
         """ """
-        return self.storage['data']
+        return self.storage[self.DATA_GROUP]
+
+    def get_data_group(self, group_name):
+        """ """
+        return self.storage[self.DATA_GROUP][str(group_name)]
 
     def update_attributes(self, attributes=None, **attrs):
         """Add attributes to the HDF5 file.
@@ -255,14 +259,18 @@ class HDF5Catalogue(object):
             # Now update the group - this is uncertain if the groups don't exist
             self.update_data(zone_data, zone)
 
-    def update_data(self, group_data, group_name=0, nmax=None):
+    def _get_group_path(self, group_name):
+        """ Return the full path to the group """
+        return '%s/%s'%(self.DATA_GROUP, group_name)
+
+    def update_data(self, group_data, group_name=0, nmax=None, ensure_group_does_not_exist=False):
         """ Add catalogue data belonging to a single group.
         group_data - dictionary
         group_name - default 0
         nmax - maximum number of objects in the group.  Only used if preallocate_file is enabled.
         """
         if self.readonly: raise WriteError("File loaded in read-only mode.")
-        group_name = '%s/%s'%(self.DATA_GROUP, group_name)
+        group_name = self._get_group_path(group_name)
 
         group = self.storage.require_group(group_name)
 
