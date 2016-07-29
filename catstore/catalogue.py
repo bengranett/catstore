@@ -9,7 +9,7 @@ class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
 
 	_coordinate_system = 'equatorial'
-	_required_columns = ('imagecoord','skycoord','mag')
+	_required_columns = ('imagecoord','mag')
 	_required_meta = ()
 	_immutable_attributes = ('_coordinate_system', '_required_columns', '_required_meta', '_immutable_attributes')
 
@@ -109,11 +109,14 @@ class Catalogue(object):
 
 		self.__dict__['_data'] = data
 
-
 	def dump(self, filename):
 		""" Dump the data array to a Hickle file. """
 		import hickle
 		hickle.dump(filename, self.__dict__['_data'])
+
+	def get_data(self):
+		""" Return the data array."""
+		return self.__dict__['_data']
 
 	def build_tree(self):
 		""" Initialize the data structure for fast spatial lookups.
@@ -181,10 +184,12 @@ class Catalogue(object):
 
 		matches = self.query_disk(cx,cy,r)
 
+		data_x, data_y = np.transpose(self.__dict__['_data']['imagecoord'])
+
 		results = []
 		for i, match in enumerate(matches):
-			dx = self.lon[match] - cx[i]
-			dy = self.lat[match] - cy[i]
+			dx = data_x[match] - cx[i]
+			dy = data_y[match] - cy[i]
 			dxt = dx * costheta - dy * sintheta
 			dyt = dx * sintheta + dy * costheta
 
@@ -198,29 +203,27 @@ class Catalogue(object):
 		return results
 
 
-	def plot(self):
-		""" Create a Mollweide projected plot of the objects.
+	def plot(self, nplot=10000, **plotparams):
+		""" Make a cartesian image coordinates scatter plot using matplotlib.
 
-		Inputs
-		------
-		None
-
-		Outputs
-		------
-		None
+		Parameters
+		----------
+		nplot : int
+			Maximum number of objects to show in the plot.
 		"""
+		xy = self.__dict__['_data']['imagecoord']
 
 		# Subsample a big catalogue
-		if len(self) > 10000:
+		if len(self) > nplot:
 			index = np.arange(len(self))
-			index = np.random.choice(index,10000)
+			index = np.random.choice(index, nplot)
 			# Coordinates in radians
-			x = misc.torad(self.lon[index])
-			y = np.pi-(misc.torad(self.lat[index])+np.pi/2.0)
+			x,y = np.transpose(xy[index])
+		else:
+			x,y = np.transpose(xy)
 
-		# Setup healpix
-		hp.graticule()
-		hp.visufunc.projscatter(y, x, s=10., lw=0.0)
+		import pylab
+		pylab.scatter(x,y,**plotparams)
 
 class CatalogueError(Exception):
 	pass
