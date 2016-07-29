@@ -8,14 +8,12 @@ from pypelid.utils import sphere, misc
 class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
 
-	_hp_order = 'nest'
 	_coordinate_system = 'equatorial'
-	_cat_columns = ('x','y','mag','ra','dec')
-	_cat_meta = ('name', 'zone_resolution', 'zone_list', 'centre', 'mag_filt')
-	_immutable_attributes = ('_hp_order', '_coordinate_system', '_cat_columns', 
-		'_cat_meta', '_immutable_attributes')
+	_required_columns = ('imagecoord','skycoord','mag')
+	_required_meta = ()
+	_immutable_attributes = ('_coordinate_system', '_required_columns', '_required_meta', '_immutable_attributes')
 
-	def __init__(self, data=None, metadata=None):
+	def __init__(self, data=None, metadata=None, **attrs):
 		"""
 		Inputs
 		------
@@ -26,15 +24,22 @@ class Catalogue(object):
 				   tuple
 		"""
 		
-		# Store the required metadata as attributes
+		# process the input meta data
+		meta = {}
 		if metadata is not None:
-			for kw in _cat_metadata: 
-				try:
-					self.__setattr__(kw, metadata[kw])
-				except KeyError:
-					raise KeyError(kw + ' not found. It is needed in Catalogue metadata!')
-			if len(metadata) > len(_cat_metadata):
-				logging.warning('Some of the metadata you are passing to Catalogue is not used.')
+			for key, value in metadata.items():
+				meta[key] = value
+		for key, value in attrs.items():
+			meta[key] = value
+
+		for key in self._required_meta: 
+			if key not in meta:
+				raise Exception('Meta key %s not found. It is needed in Catalogue metadata!'%key)
+
+		if len(meta) > len(self._required_meta):
+			logging.warning('Some of the metadata you are passing to Catalogue is not used.')
+
+		self.__dict__['_meta'] = meta
 
 		# Load the data
 		self.__dict__['_data'] = {}
@@ -91,43 +96,24 @@ class Catalogue(object):
 		return self._data.dtype.fields.has_key(key)
 
 	def load(self, data):
+		""" Import the data array """
+		try:
+			if not data.dtype.fields:
+				raise TypeError('The Catalogue class must be loaded with a structured array!')
+		except AttributeError:
+			raise TypeError('The Catalogue class must be loaded with a structured array!')
 
-		if not data.dtype.fields:
-			raise Exception('The Catalogue class must be loaded with a structured array!')
+		for column in self._required_columns:
+			if not column in data.dtype.names:
+				raise Exception('Data array is missing a required column: %s'%column)
+
+		self.__dict__['_data'] = data
 
 
-	def make_view(self, cat):
-		""" Copy data in from a catalogue. """
-		self._data = cat._data
-		self._lookup_tree = cat._lookup_tree
-		self._lon_name = cat._lon_name
-		self._lat_name = cat._lat_name
-		self._lon = cat._lon
-		self._lat = cat._lat
-
-	def read(self, filename):
-		""" Read in a data file containing the input catalogue.
-
-		Understands the following extensions:
-		dat  - text file to be read with numpy.genfromtxt
-		fits - fits file to be read with fitsio
-
-		Inputs
-		------
-		filename   - file to load
-		names      - column names
-		converters - dictionary with types to feed to numpy.genfromtxt (not used for fits)
-		fits_ext   - fits extension number (default 1)
-
-		Outputs
-		-------
-		structured array
-		"""
-		pass
-
-	def write(self, filename):
-		""" write a data file """
-		pass
+	def dump(self, filename):
+		""" Dump the data array to a Hickle file. """
+		import hickle
+		hickle.dump(filename, self.__dict__['_data'])
 
 	def build_tree(self):
 		""" Initialize the data structure for fast spatial lookups.
@@ -140,7 +126,7 @@ class Catalogue(object):
 		-------
 		None
 		"""
-		xy = np.transpose([self._imagex, self._imagey])
+		xy = self.__dict__['_data']['imagecoord']
 		self._lookup_tree = KDTree(xy)
 
 	def query_disk(self, x, y, radius=1.):
@@ -237,16 +223,8 @@ class Catalogue(object):
 		hp.visufunc.projscatter(y, x, s=10., lw=0.0)
 
 class CatalogueError(Exception):
-	"""Exception raised for errors in the input.
-
-	Attributes:
-		expr -- input expression in which the error occurred
-		msg  -- explanation of the error
-	"""
-
-	def __init__(self, msg):
-		self.msg = msg
-
+	pass
+	
 if __name__ == '__main__':
 	cat = Catalogue()
 	cat._cat_meta = 'hello'
