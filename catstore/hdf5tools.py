@@ -207,7 +207,12 @@ class HDF5Catalogue(object):
         else:
             # expect to find a list of dtype compatible tuples
             # construct dtype objects
-            dtypes_list = [np.dtype([t]) for t in dtypes]
+            for t in dtypes:
+                try:
+                    t = np.dtype(t)
+                except TypeError:
+                    t = np.dtype([t])
+                dtypes_list.append(t)
 
         data = {}
         for dtype in dtypes_list:
