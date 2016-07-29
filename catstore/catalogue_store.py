@@ -26,7 +26,7 @@ class CatalogueStore(object):
 							}
 	_required_columns = ('skycoord',)
 
-	def __init__(self, filename=None, zone_resolution=2, zone_order=HP.RING,
+	def __init__(self, filename=None, zone_resolution=1, zone_order=HP.RING,
 					check_hash=True, require_hash=True, official_stamp='pypelid'):
 		""" Initialize the catalogue backend. """
 		self.filename = filename
@@ -155,7 +155,8 @@ class CatalogueStore(object):
 				continue
 				
 			# access longitude and latitude...
-			lon,lat = np.transpose(data['skycoord'][:])
+			lon = np.transpose(data['skycoord']['ra'])
+			lat = np.transpose(data['skycoord']['dec'])
 			cat_xyz = sphere.lonlat2xyz(lon, lat)
 
 			mu = np.dot(xyz, cat_xyz)
@@ -274,7 +275,8 @@ class CatalogueStore(object):
 		# initialize a mollweide map
 		hp.mollview(np.zeros(12)+float('nan'), cbar=False)
 		for data in self.get_data():
-			lon,lat = np.transpose(data['skycoord'][:])
+			lon = np.transpose(data['skycoord']['ra'])
+			lat = np.transpose(data['skycoord']['dec'])
 
 			# select a subset of points
 			if plot_every>1:
