@@ -207,6 +207,7 @@ class HDF5Catalogue(object):
         else:
             # expect to find a list of dtype compatible tuples
             # construct dtype objects
+            dtypes_list = []
             for t in dtypes:
                 try:
                     t = np.dtype(t)
