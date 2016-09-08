@@ -1,7 +1,7 @@
 import numpy as np
 
 import catalogue
-import pypelid.vm.healpix_projection as HP
+import pypelid.utils.healpix_projection as HP
 import pypelid.utils.hdf5tools as hdf5tools
 import pypelid.utils.misc as misc
 import pypelid.utils.sphere as sphere
