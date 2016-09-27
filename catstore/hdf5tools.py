@@ -11,15 +11,20 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None, store_hash_in_file=
 
     Inputs
     ------
-    filename - name of file to operate on
-    hash_length - number of bytes reserved for the hash at the start of the file.
-    reserved - skip a number of bytes at the start of the file (only used if store_hash_in_file is True)
-    store_hash_in_file - the hash will be inserted at the start of the file, so start hashing after hash_length.
-    chunk_size - hash chunk size
+    filename : str
+        name of file to operate on
+    hash_length : int
+        number of bytes reserved for the hash at the start of the file.
+    reserved :  int
+        skip a number of bytes at the start of the file (only used if store_hash_in_file is True)
+    store_hash_in_file : bool
+        the hash will be inserted at the start of the file, so start hashing after hash_length.
+    chunk_size : int
+        hash chunk size
 
     Outputs
     -------
-    digest string
+    str : digest
     """
     import time
     from pyblake2 import blake2b
@@ -49,9 +54,23 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None, store_hash_in_file=
     return hasher.hexdigest()
 
 def read_hdf5_hash(filename, skip=7, hash_info_len=1):
-    """ Read the hash string from the beginning of the file. 
+    """ Read the hash string from the beginning of the file.
+
     The first bytes in the file specified by skip are reserved.
     The byte at skip+1 stores the hash_length
+
+    Parameters
+    ----------
+    filename : str
+        path to file
+    skip : int
+        number of bytes reserved before the hash data in the file.
+    hash_info_len : int
+        Number of bytes used to store the hash length (usually 1).
+
+    Note
+    ----
+    The total number of bytes before the hash is skip+hash_info_len
     """
     with open(filename, 'rb') as f:
         f.seek(skip)
@@ -63,17 +82,26 @@ def read_hdf5_hash(filename, skip=7, hash_info_len=1):
 def validate_hdf5_hash(filename, skip=7, hash_info_len=1):
     """ Check if the hash matches the file.
 
-    Input
-    -----
-    filename 
-    skip - number of bytes reserved before the hash data in the file.
-           The hash digest will start at skip + 1.
+    Parameters
+    ----------
+    filename : str
+        path to file
+    skip : int
+        number of bytes reserved before the hash data in the file.
+    hash_info_len : int
+        Number of bytes used to store the hash length (usually 1).
 
-    Output
+    Returns
     ------
-    Return True if hash matches, False otherwise
-    tuple (digest read, digest computed)
+    Return True if hash matches
 
+    Raises
+    ------
+    FileValidationError if hash does not match.
+
+    Note
+    ----
+    The total number of bytes before the hash is skip+hash_info_len
     """
     digest_read = read_hdf5_hash(filename, skip=skip, hash_info_len=hash_info_len)
     hash_length = len(digest_read)
@@ -86,7 +114,23 @@ def validate_hdf5_hash(filename, skip=7, hash_info_len=1):
 
 
 def validate_hdf5_stamp(filename, expected='pypelid'):
-    """ Read the first few bytes of the file. """
+    """ Read the first few bytes of the file.
+
+    Parameters
+    ----------
+    filename : str
+        path to file
+    expected : str
+        prefice expected (usually 'pypelid').
+
+    Returns
+    ------
+    Return True if hash matches
+
+    Raises
+    ------
+    FileValidationError if string does not match.
+    """
     with open(filename, 'rb') as f:
         stamp = f.read(len(expected))
 
@@ -96,7 +140,27 @@ def validate_hdf5_stamp(filename, expected='pypelid'):
     raise FileValidationError("Error reading file %s: stamp validation failed.  Read %s but expected %s."%(filename, stamp, expected))
 
 def validate_hdf5_file(filename, check_hash=True, require_hash=True, official_stamp='pypelid'):
-    """ """
+    """ Read the first few bytes of the file.
+
+    Parameters
+    ----------
+    filename : str
+        path to file
+    check_hash : bool
+        check hash
+    require_hash : bool
+        require valid hash for validation
+    official_stamp : str
+        prefice expected (usually 'pypelid').
+
+    Returns
+    ------
+    Return True if hash matches, False otherwise
+
+    Raises
+    ------
+    FileValidationError is raised if hash does not match and require_hash is True
+    """
     # test that the pypelid stamp is in the header
     validate_hdf5_stamp(filename, official_stamp)
 
@@ -108,10 +172,32 @@ def validate_hdf5_file(filename, check_hash=True, require_hash=True, official_st
             logging.warning("%s: hash validation failed.", filename)
             if require_hash:
                 raise
+            return False
+    return True
 
 
 class HDF5Catalogue(object):
-    """ """
+    """ HDF5 catalogue backend.
+
+    Parameters
+    ----------
+    filename : str
+        name of file to operate on
+    chunk_size : int
+        number of elements in chunk (should correspond to 1KB to 1MB)
+    hash_length : int
+        number of bytes reserved for the hash at the start of the file.
+    header_bytes : int
+        bytes reserved for the header at the start of the file.
+    stamp : str
+        string to print at the beginning of the header.
+    hashit : bool
+        compute the hash
+    preallocate_file : bool
+        data arrays will be initialized zero with size given by the max number of objects in the group.
+    compression : dict
+        dictionary of paramters to be passed to create_dataset to enable compression.
+    """
     # these are reserved group names
 
     DATA_GROUP = 'data'
@@ -123,8 +209,7 @@ class HDF5Catalogue(object):
     headerlinewidth = 80
 
     def __init__(self, filename, mode='a', chunk_size=1024, hash_length=32, header_bytes=4096, stamp='pypelid', 
-                hashit=True, hash_info_len=1, preallocate_file=False, 
-                compression={}):
+                hashit=True, hash_info_len=1, preallocate_file=True, compression={}):
         """     
         filename - name of file to operate on
         chunk_size - number of elements in chunk (should correspond to 1KB to 1MB)
@@ -182,6 +267,7 @@ class HDF5Catalogue(object):
         if attributes is not None:
             for key, value in attributes.items():
                 self.storage.attrs[key] = value
+                logging.debug("HDF5 set %s %s %s",key,value,self.storage.attrs[key])
         for key, value in attrs.items():
             self.storage.attrs[key] = value
 
@@ -229,7 +315,7 @@ class HDF5Catalogue(object):
         group_arr : np.ndarray
             a column corresponding in length to the number of rows in data
             giving a rule how to distribute the objects into the HDF5 groups
-        data : dict
+        data : dict or numpy structured array
             the data columns given as dictionary entries with columns names as keys
 
         Returns
@@ -259,9 +345,13 @@ class HDF5Catalogue(object):
 
     def update_data(self, group_data, group_name=0, nmax=None, ensure_group_does_not_exist=False):
         """ Add catalogue data belonging to a single group.
-        group_data - dictionary
-        group_name - default 0
-        nmax - maximum number of objects in the group.  Only used if preallocate_file is enabled.
+
+        group_data : dict or numpy structured array
+            data to load
+        group_name : int
+            default 0
+        nmax : int
+            maximum number of objects in the group.  Only used if preallocate_file is enabled.
         """
         if self.readonly: raise WriteError("File loaded in read-only mode.")
         group_name = self._get_group_path(group_name)
@@ -354,8 +444,11 @@ class HDF5Catalogue(object):
 
     def update_metagroup(self, group_name, attributes, **attrs):
         """ Create a group to store metadata.
-        group_name - name of the meta data group
-        attributes - dictionary of meta data.
+
+        group_name : str
+            name of the meta data group
+        attributes : dict
+            metadata key-value pairs
         """
         if self.readonly: raise WriteError("File loaded in read-only mode.")
         group = self.storage.require_group(group_name)
