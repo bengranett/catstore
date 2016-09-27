@@ -252,7 +252,10 @@ class HDF5Catalogue(object):
 
     def get_data(self):
         """ """
-        return self.storage[self.DATA_GROUP]
+        try:
+            return self.storage[self.DATA_GROUP]
+        except KeyError:
+            raise NoData("File has no data")
 
     def get_data_group(self, group_name):
         """ """
@@ -626,5 +629,7 @@ class HDF5Catalogue(object):
 class FileValidationError(Exception):
     pass
 class WriteError(Exception):
+    pass
+class NoData(Exception):
     pass
 

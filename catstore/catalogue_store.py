@@ -64,6 +64,7 @@ class CatalogueStore(object):
 				logging.warning("Catalogue files are read-only.  Cannot modify %s.", filename)
 			self.readonly = True
 			self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash, official_stamp=official_stamp)
+			self._open_pypelid(filename, mode=mode)
 			return
 
 		self.readonly = False
@@ -124,7 +125,10 @@ class CatalogueStore(object):
 		""" Load a pypelid catalogue store file. """
 		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode)
 		# access the data group
-		# self._datastore = self.h5file.get_data()
+		try:
+			self._datastore = self.h5file.get_data()
+		except hdf5tools.NoData:
+			self._datastore = None
 		return self.h5file
 
 	def _close_pypelid(self):
@@ -407,8 +411,7 @@ class CatalogueStore(object):
 		# initialize a mollweide map
 		hp.mollview(np.zeros(12)+float('nan'), cbar=False)
 		for data in self.get_data():
-			lon = np.transpose(data['skycoord']['ra'])
-			lat = np.transpose(data['skycoord']['dec'])
+			lon,lat = np.transpose(data['skycoord'])
 
 			# select a subset of points
 			if plot_every>1:
