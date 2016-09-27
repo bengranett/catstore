@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 import catalogue
@@ -9,39 +10,76 @@ import pypelid.utils.sphere as sphere
 import logging
 
 class CatalogueStore(object):
-	""" Storage backend for loading catalogues from disk.
+	""" Catalogue storage backend using HDF5.
 
-	The catalogues support spatial queries using spherical coordinates. 
-	
-	Full-sky catalogues may be loaded in spatial chunks called zones only when needed so that the entire
-	catalogue is not stored in memory.
+	The catalogue data should be accessed with spatial queries through the retrieve() method.
+
+	Under the hood the survey is partitioned into zones using Healpix cells.  The resolution
+	is set by the zone_resolution parameter.
+
+	Parameters
+	----------
+	filename : str
+		Path to file.  If exists file will be opened read-only.
+	mode : str
+		Mode for opening file ('r', 'w').  Existing files are always opened read-only.
+	zone_resolution : int
+		Zone resolution to use for partitioning data groups. resolution = log2(healpix nside)
+
+	Other Parameters
+	----------------
+	zone_order : str
+		Zone ordering can be either healpix ring or nest ordering. (either 'ring' or 'nest')
+		Ring ordering is faster for querying.
+	check_hash : bool
+		If True, check hash when opening file.
+	require_hash : bool
+		Raise error if hash does not validate.
+	official_stamp : str
+		String used to prefice catalogue files.
 	"""
 
 	# Define sky partition mode constants
-	FULLSKY = 0
-	HEALPIX = 1
-	_required_attributes = {'partition_scheme': ('HEALPIX',),
+	ZONE_ZERO = 0
+	FULLSKY = 'FULLSKY'
+	HEALPIX = 'HEALPIX'
+	_required_attributes = {'partition_scheme': (HEALPIX,),
 							'zone_resolution': range(12),
 							'zone_order': (HP.RING,HP.NEST)
 							}
 	_required_columns = ('skycoord',)
 
-	def __init__(self, filename=None, zone_resolution=1, zone_order=HP.RING,
-					check_hash=True, require_hash=True, official_stamp='pypelid'):
-		""" Initialize the catalogue backend. """
-		self.filename = filename
-		self._trees = {}
+	def __init__(self, filename, mode='r', zone_resolution=1, zone_order=HP.RING,
+					check_hash=True, require_hash=True, official_stamp='pypelid', **metadata):
+		""" """
+		self.h5file = None
 
-		if filename is not None:
-			self.init_pypelid_file(check_hash=check_hash, require_hash=require_hash, official_stamp=official_stamp)
+		self.filename = filename
+
+		self.zone_counts = None
+		self.zone_index = {}
+
+		if os.path.exists(filename):
+			if mode != 'r':
+				logging.warning("Catalogue files are read-only.  Cannot modify %s.", filename)
+			self.readonly = True
+			self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash, official_stamp=official_stamp)
 			return
-			
+
+		self.readonly = False
+		self._open_pypelid(filename, mode=mode)
+
+		self.metadata = metadata
 		self.zone_resolution = zone_resolution
 		self.zone_order = zone_order
+		self.metadata['partition_scheme'] = self.HEALPIX
+		self.metadata['zone_resolution'] = zone_resolution
+		self.metadata['zone_order'] = zone_order
 		self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
 
-	def init_pypelid_file(self, check_hash=True, require_hash=True, official_stamp='pypelid'):
-		""" Check the input pypelid file and initialize. """
+	def _load_pypelid_file(self, check_hash=True, require_hash=True, official_stamp='pypelid'):
+		""" Check the input pypelid file and initialize.
+		"""
 		hdf5tools.validate_hdf5_file(self.filename, check_hash=check_hash, require_hash=require_hash, 
 									official_stamp=official_stamp)
 
@@ -76,31 +114,125 @@ class CatalogueStore(object):
 
 	def __enter__(self):
 		""" """
-		self._open_pypelid(self.filename)
 		return self
 
 	def __exit__(self, type, value, traceback):
 		""" """
 		self._close_pypelid()
 
-	def _open_pypelid(self, filename):
+	def _open_pypelid(self, filename, mode='r'):
 		""" Load a pypelid catalogue store file. """
-		self.h5file = hdf5tools.HDF5Catalogue(filename, mode='r')
+		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode)
 		# access the data group
-		self._datastore = self.h5file.get_data()
+		# self._datastore = self.h5file.get_data()
 		return self.h5file
 
 	def _close_pypelid(self):
 		""" """
-		self.h5file.close()
+		if self.h5file is not None:
+			self.h5file.close()
 
-	def write(self, filename):
-		""" Construct and write a new catalogue store file in pypelid format. """
-		pass
+	def preload(self, lon, lat):
+		""" Run pre-processing needed before creating a new catalogue file.
 
-	def index(self):
+		Given longitude and latitude coordinates count number of objects in each zone
+		for pre-allocation.
+
+		Parameters
+		----------
+		lon : ndarray
+			longitude
+		lat : ndarray
+			latitude
+
+		Returns
+		-------
+		None
+		"""
+		if self.zone_counts is None:
+			self.zone_counts = np.zeros(self._hp_projector.npix)
+
+		zid = self._index(lon, lat)
+		counts = np.bincount(zid)
+		self.zone_counts[:len(counts)] += counts
+
+	def allocate(self, dtypes):
+		""" Pre-allocate the file.
+
+		Parameters
+		----------
+		dtypes : list of numpy dtypes
+		"""
+		if self.readonly:
+			logging.warning("File is readonly! %s",self.filename)
+			return
+		index, = np.where(self.zone_counts)
+		logging.debug("Preallocating group IDs: %s",index)
+		self.h5file.preallocate_groups(index, self.zone_counts[index], dtypes=dtypes)
+
+	def update(self, data):
+		""" Add data to the file.
+
+		Parameters
+		----------
+		data : dict or numpy structured array
+		"""
+		if self.readonly:
+			logging.warning("File is readonly! %s",self.filename)
+			return
+
+		if not 'skycoord' in data:
+			raise Exception("skycoord column is required")
+
+
+		zone_index = self._index(*data['skycoord'].transpose())
+		self.h5file.update(zone_index, data)
+
+		if not self.metadata.has_key('count'):
+			self.metadata['count'] = 0
+		key,arr = data.items()[0]
+		self.metadata['count'] += len(arr)
+		self.update_attributes(self.metadata)
+
+	def update_attributes(self, attrib=None, **args):
+		""" Update file metadata.
+
+		attrib: dict
+			key-value pairs
+		"""
+		if self.readonly:
+			logging.warning("File is readonly! %s",self.filename)
+			return
+		self.h5file.update_attributes(attrib, **args)
+
+	def update_units(self, attrib):
+		""" Update units in file metadata.
+
+		attrib : dict
+			dictionary with column names and units
+		"""
+		if self.readonly:
+			logging.warning("File is readonly! %s",self.filename)
+			return
+		self.h5file.update_units(attrib)
+
+	def update_description(self, attrib):
+		""" Update description in file metadata.
+
+		attrib : dict
+			dictionary with column names and description
+		"""
+		if self.readonly:
+			logging.warning("File is readonly! %s",self.filename)
+			return
+		self.h5file.update_description(attrib)
+
+
+	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
-		pass
+		if self.metadata['partition_scheme'] == self.HEALPIX:
+			return self._hp_projector.ang2pix(lon, lat)
+		return self.ZONE_ZERO
 
 	def _retrieve_zone(self, zone):
 		""" Retrieve the data within the given zones."""
