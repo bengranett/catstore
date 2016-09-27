@@ -185,7 +185,7 @@ class HDF5Catalogue(object):
         for key, value in attrs.items():
             self.storage.attrs[key] = value
 
-    def preallocate_groups(self, group_names, nmax, column_names=None, dtypes=None, dim=None):
+    def preallocate_groups(self, group_names, nmax, dtypes=None):
         """ Create groups containing preallocated datasets.
 
         Parameters
@@ -197,28 +197,16 @@ class HDF5Catalogue(object):
         dtypes : list
             List of tuples that are recognized by np.dtype
         """
-        # create an empty dataset with the given dtype
-        if column_names is not None:
-            if dim is None:
-                dim = np.ones(len(column_names), dtype=int)
-            dtypes_list = []
-            for i, name in enumerate(column_names):
-                dtypes_list.append(np.dtype([(name, dtypes[i], dim[i])]))
-        else:
-            # expect to find a list of dtype compatible tuples
-            # construct dtype objects
-            dtypes_list = []
-            for t in dtypes:
-                try:
-                    t = np.dtype(t)
-                except TypeError:
-                    t = np.dtype([t])
-                dtypes_list.append(t)
-
         data = {}
-        for dtype in dtypes_list:
+        for t in dtypes:
+            try:
+                dtype = np.dtype(t)
+            except TypeError:
+                dtype = np.dtype([t])
+
             name = dtype.names[0]
-            data[name] = np.zeros(0, dtype=dtype)
+            data[name] = np.zeros(0, dtype=dtype[0])
+            logging.debug("HDF5 added dataset %s with type %s.",name, dtype[0])
 
         if not misc.check_is_iterable(group_names):
             group_names = [group_names]
