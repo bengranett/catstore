@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+
 import logging
 import numpy as np
 import h5py
@@ -15,13 +18,14 @@ class Catalogue(object):
 
 	def __init__(self, data=None, metadata=None, **attrs):
 		"""
-		Inputs
-		------
-		data - a structured array, rows are objects, columns are object 
-			   properties, which include at least x, y, mag, ra, dec
-		metadata - a dictionary of metadata, should include at least
-				   catalogue name, zone_resolution, zone_list, a centre 
-				   tuple
+		Parameters
+		----------
+		data : recarray
+			structured array, rows are objects, columns are object properties, which include at least:
+			x, y, mag, ra, dec
+		metadata : dict
+			dictionary of metadata, should include at least:
+			catalogue name, zone_resolution, zone_list, a centre tuple
 		"""
 		
 		# process the input meta data
@@ -50,6 +54,11 @@ class Catalogue(object):
 		""" Return columns by name 
 
 		Columns may be accessed by catalogue.alpha
+
+		Parameters
+		----------
+		key
+
 		"""
 		# if the attribute is a class variable, return it
 		try:
@@ -70,7 +79,13 @@ class Catalogue(object):
 	def __setattr__(self, key, value):
 		""" Set a catalogue attribute.  
 
-		Raises CatalogueError exception if the variable name exists in the data table. 
+			Raises CatalogueError exception if the variable name exists in the data table. 
+
+		Parameters
+		----------
+		key
+		value
+
 		"""
 
 		if self.__dict__['_data'].has_key(key):
@@ -121,13 +136,6 @@ class Catalogue(object):
 	def build_tree(self):
 		""" Initialize the data structure for fast spatial lookups.
 
-		Inputs
-		------
-		None
-
-		Outputs
-		-------
-		None
 		"""
 		xy = self.__dict__['_data']['imagecoord']
 		self._lookup_tree = KDTree(xy)
@@ -135,15 +143,20 @@ class Catalogue(object):
 	def query_disk(self, x, y, radius=1.):
 		""" Find neighbors to a given point (ra, dec).
 
-		Inputs
-		------
-		cx - center x
-		cy - center y
-		radius - radius
+		Parameters
+		----------
+		x 
+			center x  
+		y
+			center y
+		radius : optional
+			radius (default=1.)
 
-		Outputs
+		Returns
 		-------
-		indices of objects in selection
+		?
+			indices of objects in selection
+
 		"""
 		try:
 			self.lookup_tree
@@ -157,19 +170,29 @@ class Catalogue(object):
 
 	def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
 		""" Find objects in a rectangle.
-		Inputs
-		------
-		cx - array center x
-		cy - array center y
-		width - float width
-		height - float height
-		pad_x - float add this padding to width
-		pad_y - float add this padding to height
-		orientation - float position angle of the box
 
-		Outputs
+		Parameters
+		----------
+		x : array
+			center x
+		y : array
+			center y
+		width : float
+			width
+		height : float
+			height
+		pad_x : float
+			add this padding to width
+		pad_y : float
+			add this padding to height
+		orientation : float
+			position angle of the box
+
+		Returns
 		-------
-		list of indices of objects in selection
+		? : list
+			list of indices of objects in selection
+
 		"""
 		try:
 			len(cx)
@@ -210,6 +233,7 @@ class Catalogue(object):
 		----------
 		nplot : int
 			Maximum number of objects to show in the plot.
+
 		"""
 		xy = self.__dict__['_data']['imagecoord']
 
