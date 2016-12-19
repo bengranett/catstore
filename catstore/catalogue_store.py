@@ -9,6 +9,7 @@ import pypelid.utils.sphere as sphere
 
 import logging
 
+
 class CatalogueStore(object):
 	""" Catalogue storage backend using HDF5.
 
@@ -37,6 +38,29 @@ class CatalogueStore(object):
 		Raise error if hash does not validate.
 	official_stamp : str
 		String used to prefice catalogue files.
+
+	Notes
+	-----
+	API to use to create a new catalogue file.
+
+	>>> data = {
+	>>>         'skycoord': coord,
+	>>>         'redshift': redshift,
+	>>>        }
+	>>> dtypes = [
+	>>>           np.dtype([('skycoord', float, 2)]),
+	>>>           np.dtype([('redshift', float, 1)])
+	>>>          ]
+	>>> units = {'skycoord': 'degree', 'redshift': redshift}
+	>>> meta = {'coordsys': 'equatorial J2000'}
+	>>> with CatalogueStore(filename, 'w', name='test') as cat:
+	>>>     cat.preload(ra, dec)
+	>>>     cat.allocate(dtypes)
+	>>>     cat.update(data)
+	>>>     cat.update_attributes(meata)
+	>>>     cat.update_units(units)
+	>>>     cat.update_description(description)
+	>>>
 	"""
 
 	# Define sky partition mode constants
@@ -45,7 +69,7 @@ class CatalogueStore(object):
 	HEALPIX = 'HEALPIX'
 	_required_attributes = {'partition_scheme': (HEALPIX,),
 							'zone_resolution': range(12),
-							'zone_order': (HP.RING,HP.NEST)
+							'zone_order': (HP.RING, HP.NEST)
 							}
 	_required_columns = ('skycoord',)
 
@@ -63,7 +87,8 @@ class CatalogueStore(object):
 			if mode != 'r':
 				logging.warning("Catalogue files are read-only.  Cannot modify %s.", filename)
 			self.readonly = True
-			self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash, official_stamp=official_stamp)
+			self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash,
+									official_stamp=official_stamp)
 			self._open_pypelid(filename, mode=mode)
 			return
 
@@ -76,18 +101,21 @@ class CatalogueStore(object):
 		self.metadata['partition_scheme'] = self.HEALPIX
 		self.metadata['zone_resolution'] = zone_resolution
 		self.metadata['zone_order'] = zone_order
-		self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
+		self._hp_projector = HP.HealpixProjector(resolution=self.zone_resolution,
+												order=self.zone_order)
 
-	def _load_pypelid_file(self, check_hash=True, require_hash=True, official_stamp='pypelid'):
+	def _load_pypelid_file(self, check_hash=True, require_hash=True,
+							official_stamp='pypelid'):
 		""" Check the input pypelid file and initialize.
 		"""
-		hdf5tools.validate_hdf5_file(self.filename, check_hash=check_hash, require_hash=require_hash, 
+		hdf5tools.validate_hdf5_file(self.filename, check_hash=check_hash,
+									require_hash=require_hash,
 									official_stamp=official_stamp)
 
 		with hdf5tools.HDF5Catalogue(self.filename, mode='r') as h5file:
 			# import all attributes in the file.
 			self.metadata = {}
-			for key,value in h5file.get_attributes().items():
+			for key, value in h5file.get_attributes().items():
 				self.metadata[key] = value
 
 			# ensure that required attributes are there with acceptable values.
@@ -106,11 +134,12 @@ class CatalogueStore(object):
 			for column_name in self._required_columns:
 				try:
 					if column_name not in h5file.get_columns():
-						raise Exception("Cannot load %s: data column is missing: %s"%(self.filename, column_name))
+						raise Exception("Cannot load %s: data column is missing: %s" % (self.filename, column_name))
 				except KeyError:
-						raise Exception("Cannot load %s: column description group is missing"%(self.filename))
+						raise Exception("Cannot load %s: column description group is missing" % (self.filename))
 
-		self._hp_projector = HP.HealpixProjector(resolution = self.zone_resolution, order=self.zone_order)
+		self._hp_projector = HP.HealpixProjector(resolution=self.zone_resolution,
+												order=self.zone_order)
 		self._datastore = None
 
 	def __enter__(self):
@@ -168,10 +197,10 @@ class CatalogueStore(object):
 		dtypes : list of numpy dtypes
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s",self.filename)
+			logging.warning("File is readonly! %s", self.filename)
 			return
 		index, = np.where(self.zone_counts)
-		logging.debug("Preallocating group IDs: %s",index)
+		logging.debug("Preallocating group IDs: %s", index)
 		self.h5file.preallocate_groups(index, self.zone_counts[index], dtypes=dtypes)
 
 	def update(self, data):
@@ -182,19 +211,18 @@ class CatalogueStore(object):
 		data : dict or numpy structured array
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s",self.filename)
+			logging.warning("File is readonly! %s", self.filename)
 			return
 
-		if not 'skycoord' in data:
+		if 'skycoord' not in data:
 			raise Exception("skycoord column is required")
-
 
 		zone_index = self._index(*data['skycoord'].transpose())
 		self.h5file.update(zone_index, data)
 
 		if not self.metadata.has_key('count'):
 			self.metadata['count'] = 0
-		key,arr = data.items()[0]
+		key, arr = data.items()[0]
 		self.metadata['count'] += len(arr)
 		self.update_attributes(self.metadata)
 
@@ -205,7 +233,7 @@ class CatalogueStore(object):
 			key-value pairs
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s",self.filename)
+			logging.warning("File is readonly! %s", self.filename)
 			return
 		self.h5file.update_attributes(attrib, **args)
 
@@ -216,7 +244,7 @@ class CatalogueStore(object):
 			dictionary with column names and units
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s",self.filename)
+			logging.warning("File is readonly! %s", self.filename)
 			return
 		self.h5file.update_units(attrib)
 
@@ -227,10 +255,9 @@ class CatalogueStore(object):
 			dictionary with column names and description
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s",self.filename)
+			logging.warning("File is readonly! %s", self.filename)
 			return
 		self.h5file.update_description(attrib)
-
 
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
@@ -248,7 +275,7 @@ class CatalogueStore(object):
 	def _which_zones(self, lon, lat, radius):
 		""" Determine which zones overlap the points (lon,lat) within the radius."""
 		zones = self._hp_projector.query_disc(lon, lat, radius)
-		logging.debug("querying %f,%f... zones found: %s",lon,lat,zones)
+		logging.debug("querying %f,%f... zones found: %s", lon, lat, zones)
 		return zones
 
 	def get_zones(self):
@@ -274,12 +301,12 @@ class CatalogueStore(object):
 		indices of objects in selection
 		"""
 
-		mu_thresh = np.cos(radius * np.pi/180)
+		mu_thresh = np.cos(radius * np.pi / 180)
 
 		xyz = sphere.lonlat2xyz(clon, clat)
 
 		if misc.is_number(xyz[0]):
-			xyz = np.transpose(xyz).reshape(1,-1)
+			xyz = np.transpose(xyz).reshape(1, -1)
 		else:
 			xyz = np.transpose(xyz)
 
@@ -289,7 +316,7 @@ class CatalogueStore(object):
 				data = self._retrieve_zone(zone_i)
 			except ZoneDoesNotExist:
 				continue
-				
+
 			# access longitude and latitude...
 			lon = np.transpose(data['skycoord']['ra'])
 			lat = np.transpose(data['skycoord']['dec'])
@@ -302,7 +329,7 @@ class CatalogueStore(object):
 
 		return matches
 
-	def _query_box(self,  clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
+	def _query_box(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
 		""" Find objects in a rectangle.
 		Inputs
 		------
@@ -317,17 +344,18 @@ class CatalogueStore(object):
 		-------
 		indices of objects in selection
 		"""
-		r = np.sqrt(width**2 + height**2)/2.
-		match_dict = self._query_cap(clon,clat,r)
+		r = np.sqrt(width**2 + height**2) / 2.
+		match_dict = self._query_cap(clon, clat, r)
 
 		selection_dict = {}
-		for zone,matches in match_dict.items():
+		for zone, matches in match_dict.items():
 			data = self._retrieve_zone(zone)
-			lon,lat = np.transpose(data['skycoord'][:][matches])
-			dlon,dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)], inverse=True)
+			lon, lat = np.transpose(data['skycoord'][:][matches])
+			dlon, dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)],
+												inverse=True)
 
-			sel_lon = np.abs(dlon) < (width/2. + pad_ra)
-			sel_lat = np.abs(dlat) < (height/2. + pad_dec)
+			sel_lon = np.abs(dlon) < (width / 2. + pad_ra)
+			sel_lat = np.abs(dlat) < (height / 2. + pad_dec)
 			sel = np.where(sel_lon & sel_lat)
 
 			selection_dict[zone] = np.take(matches, sel[0])
@@ -335,7 +363,8 @@ class CatalogueStore(object):
 		return selection_dict
 
 
-	def retrieve(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0, transform=None):
+	def retrieve(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0,
+					orientation=0, transform=None):
 		""" Select objects in a rectangle and return a projected catalogue object.
 
 		Parameters
@@ -367,8 +396,8 @@ class CatalogueStore(object):
 
 		for zone, selection in matches.items():
 			data = self._retrieve_zone(zone)
-			for name,arr in data.items():
-				if not name in data_dict:
+			for name, arr in data.items():
+				if name not in data_dict:
 					data_dict[name] = []
 				data_dict[name].append(arr[:][selection])
 
@@ -376,15 +405,14 @@ class CatalogueStore(object):
 			data_dict[name] = np.concatenate(data_dict[name])
 
 		if transform is not None:
-			lon,lat = np.transpose(data_dict['skycoord'])
-			ximage,yimage = transform(lon, lat)
-			data_dict['imagecoord'] = np.transpose([ximage,yimage])
+			lon, lat = np.transpose(data_dict['skycoord'])
+			ximage, yimage = transform(lon, lat)
+			data_dict['imagecoord'] = np.transpose([ximage, yimage])
 
 		# construct a structured array
 		structured_arr = misc.dict_to_structured_array(data_dict)
 
 		return structured_arr
-
 
 	def plot(self, plot_every=10, s=5., lw=0., cmap='jet'):
 		""" Create a Mollweide projected plot of the objects.
@@ -406,21 +434,21 @@ class CatalogueStore(object):
 		from matplotlib.colors import Normalize
 		import healpy as hp
 
-		sc = ScalarMappable(Normalize(0,len(self.get_zones())), cmap=cmap)
+		sc = ScalarMappable(Normalize(0, len(self.get_zones())), cmap=cmap)
 
 		# initialize a mollweide map
-		hp.mollview(np.zeros(12)+float('nan'), cbar=False)
+		hp.mollview(np.zeros(12) + float('nan'), cbar=False)
 		for data in self.get_data():
-			lon,lat = np.transpose(data['skycoord'])
+			lon, lat = np.transpose(data['skycoord'])
 
 			# select a subset of points
-			if plot_every>1:
-				sel = np.random.choice(len(lon),len(lon)//plot_every)
+			if plot_every > 1:
+				sel = np.random.choice(len(lon), len(lon) // plot_every)
 				lon = lon[sel]
 				lat = lat[sel]
 
 			# color points based upon zone index
-			c=sc.to_rgba(int(data.name.split("/")[-1]))
+			c = sc.to_rgba(int(data.name.split("/")[-1]))
 
 			# plot
 			hp.visufunc.projscatter(lon, lat, c=c, s=s, lw=lw, lonlat=True)
