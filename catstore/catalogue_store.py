@@ -43,24 +43,24 @@ class CatalogueStore(object):
 	-----
 	API to use to create a new catalogue file.
 
-	>>> data = {
-	>>>         'skycoord': coord,
-	>>>         'redshift': redshift,
-	>>>        }
-	>>> dtypes = [
-	>>>           np.dtype([('skycoord', float, 2)]),
-	>>>           np.dtype([('redshift', float, 1)])
-	>>>          ]
-	>>> units = {'skycoord': 'degree', 'redshift': redshift}
-	>>> meta = {'coordsys': 'equatorial J2000'}
-	>>> with CatalogueStore(filename, 'w', name='test') as cat:
-	>>>     cat.preload(ra, dec)
-	>>>     cat.allocate(dtypes)
-	>>>     cat.update(data)
-	>>>     cat.update_attributes(meata)
-	>>>     cat.update_units(units)
-	>>>     cat.update_description(description)
-	>>>
+		>>> data = {
+		>>>         'skycoord': coord,
+		>>>         'redshift': redshift,
+		>>>        }
+		>>> dtypes = [
+		>>>           np.dtype([('skycoord', float, 2)]),
+		>>>           np.dtype([('redshift', float, 1)])
+		>>>          ]
+		>>> units = {'skycoord': 'degree', 'redshift': redshift}
+		>>> meta = {'coordsys': 'equatorial J2000'}
+		>>> with CatalogueStore(filename, 'w', name='test') as cat:
+		>>>     cat.preload(ra, dec)
+		>>>     cat.allocate(dtypes)
+		>>>     cat.update(data)
+		>>>     cat.update_attributes(meata)
+		>>>     cat.update_units(units)
+		>>>     cat.update_description(description)
+
 	"""
 
 	# Define sky partition mode constants
