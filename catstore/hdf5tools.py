@@ -5,35 +5,67 @@ import h5py
 import StringIO
 import logging
 import textwrap
+import copy
+import time
+import string
 
-def hash_it(filename, hash_length=32, reserved=8, skip=None, store_hash_in_file=False, chunk_size=1048576):
+hash_algorithms = {
+				'M': 'md5',
+				'B': 'blake2'
+				}
+
+def hash_it(filename, hash_length=32, reserved=8, skip=None,
+			store_hash_in_file=False, chunk_size=1048576,
+			algorithm='blake2'):
 	""" Compute hash of a file.
+
+	If the hash is stored in the first few bytes of the file these bytes can be
+	skipped by setting store_hash_in_file.
 
 	Inputs
 	------
 	filename : str
 		name of file to operate on
 	hash_length : int
-		number of bytes reserved for the hash at the start of the file.
+		number ascii characters (1 byte each) reserved for the hash at the start of the file.
 	reserved :  int
 		skip a number of bytes at the start of the file (only used if store_hash_in_file is True)
 	store_hash_in_file : bool
 		the hash will be inserted at the start of the file, so start hashing after hash_length.
 	chunk_size : int
 		hash chunk size
-
+	algorithm :  str
+		hashing algorithm can be 'blake2' or 'md5'
 	Outputs
 	-------
 	str : digest
 	"""
-	import time
-	from pyblake2 import blake2b
+	digest_size = hash_length // 2   # Two hex characters per byte
+	assert digest_size > 0
+
+	try:
+		algorithm_name = hash_algorithms[algorithm]
+	except KeyError:
+		algorithm_name = algorithm
+
+	if algorithm_name == 'blake2':
+		from pyblake2 import blake2b
+		hasher = blake2b(digest_size=digest_size)
+	elif algorithm_name == 'md5':
+		from hashlib import md5
+		hasher = md5()
+	else:
+		raise HDF5CatError("Unrecognized hash algorithm (%s)" % algorithm)
+
+	logging.debug("Hash algorithm: %s %i", algorithm, hasher.digest_size)
+
+	if hasher.digest_size > digest_size:
+		logging.warning("Digest length for algorithm %s is %i hex characters.  Digest will be truncated to %i",
+							algorithm, hasher.digest_size * 2, hash_length)
 
 	t0 = time.time()
 
-	digest_size = hash_length//2   # Two hex characters per byte
-
-	hasher = blake2b(digest_size=digest_size)
+	logging.debug("reserved %i",reserved)
 
 	with open(filename, 'rb') as f:
 		if store_hash_in_file:
@@ -43,17 +75,20 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None, store_hash_in_file=
 		logging.debug("reading file")
 		while True:
 			chunk = f.read(chunk_size)
-			if chunk == '': break
+			if chunk == '':
+				break
 			hasher.update(chunk)
 			count += 1
 		logging.debug("done reading file")
 
-	size = count * chunk_size/1024.**2
-	logging.debug("Hashed %3.1f MB in %f sec",size, time.time()-t0)
+	size = count * chunk_size / 1024.**2
+	logging.debug("Hashed %3.1f MB in %f sec", size, time.time() - t0)
 
-	return hasher.hexdigest()
+	digest = hasher.hexdigest()[:hash_length]
+	return digest
 
-def read_hdf5_hash(filename, skip=7, hash_info_len=1):
+
+def read_hdf5_hash(filename, skip=7, hash_info_len=2, hash_algo_len=1):
 	""" Read the hash string from the beginning of the file.
 
 	The first bytes in the file specified by skip are reserved.
@@ -74,12 +109,18 @@ def read_hdf5_hash(filename, skip=7, hash_info_len=1):
 	"""
 	with open(filename, 'rb') as f:
 		f.seek(skip)
-		hash_length = ord(f.read(hash_info_len))
+		hash_length = int(f.read(hash_info_len), base=16)
+		hash_algo = f.read(hash_algo_len)
 		digest = f.read(hash_length)
+	logging.debug("hash length %i, hash_algo %s, digest %i", hash_length, hash_algo, len(digest))
 
-	return digest
+	# remove null characters in case the digest is shorter than the reserved space.
+	digest = string.translate(digest, None, chr(0))
 
-def validate_hdf5_hash(filename, skip=7, hash_info_len=1):
+	return digest, hash_algo, hash_length
+
+
+def validate_hdf5_hash(filename, skip=7, hash_info_len=2, hash_algo_len=1):
 	""" Check if the hash matches the file.
 
 	Parameters
@@ -103,14 +144,16 @@ def validate_hdf5_hash(filename, skip=7, hash_info_len=1):
 	----
 	The total number of bytes before the hash is skip+hash_info_len
 	"""
-	digest_read = read_hdf5_hash(filename, skip=skip, hash_info_len=hash_info_len)
-	hash_length = len(digest_read)
-	digest_comp = hash_it(filename, hash_length, reserved=skip+hash_info_len, store_hash_in_file=True)
+	digest_read, hash_algo_code, hash_length = read_hdf5_hash(filename, skip=skip,
+											hash_info_len=hash_info_len, hash_algo_len=hash_algo_len)
+
+	digest_comp = hash_it(filename, hash_length, reserved=skip+hash_info_len+hash_algo_len,
+							store_hash_in_file=True, algorithm=hash_algo_code)
 
 	if digest_read == digest_comp:
 		return True
 
-	raise FileValidationError("Error reading file %s: hash validation failed.  Computed %s but expected %s."%(filename, digest_comp, digest_read))
+	raise HDF5CatError("Error reading file %s: hash validation failed.  Computed %s but expected %s."%(filename, digest_comp, digest_read))
 
 
 def validate_hdf5_stamp(filename, expected='pypelid'):
@@ -137,9 +180,11 @@ def validate_hdf5_stamp(filename, expected='pypelid'):
 	if stamp == expected:
 		return True
 
-	raise FileValidationError("Error reading file %s: stamp validation failed.  Read %s but expected %s."%(filename, stamp, expected))
+	raise HDF5CatError("Error reading file %s: stamp validation failed.  Read %s but expected %s."%(filename, stamp, expected))
 
-def validate_hdf5_file(filename, check_hash=True, require_hash=True, official_stamp='pypelid'):
+
+def validate_hdf5_file(filename, check_hash=True, require_hash=True, official_stamp='pypelid',
+					hash_info_len=2, hash_algo_len=1):
 	""" Read the first few bytes of the file.
 
 	Parameters
@@ -167,8 +212,8 @@ def validate_hdf5_file(filename, check_hash=True, require_hash=True, official_st
 	# test that the hash matches
 	if check_hash:
 		try:
-			validate_hdf5_hash(filename)
-		except FileValidationError:
+			validate_hdf5_hash(filename, hash_info_len=hash_info_len, hash_algo_len=hash_algo_len)
+		except HDF5CatError:
 			logging.warning("%s: hash validation failed.", filename)
 			if require_hash:
 				raise
@@ -183,6 +228,14 @@ class HDF5Catalogue(object):
 	----------
 	filename : str
 		name of file to operate on
+	mode : str
+		Open file for reading or writing ('r', 'w')
+	preallocate_file : bool
+		data arrays will be initialized zero with size given by the max number
+		of objects in the group.
+
+	Optional parameters
+	------------------
 	chunk_size : int
 		number of elements in chunk (should correspond to 1KB to 1MB)
 	hash_length : int
@@ -193,50 +246,72 @@ class HDF5Catalogue(object):
 		string to print at the beginning of the header.
 	hashit : bool
 		compute the hash
-	preallocate_file : bool
-		data arrays will be initialized zero with size given by the max number of objects in the group.
 	compression : dict
-		dictionary of paramters to be passed to create_dataset to enable compression.
+		dictionary of paramters to be passed to create_dataset (may be used to
+		enable compression).
 	"""
-	# these are reserved group names
+	# These default parameters will be deep-copied in on initialization.
+	_default_params = {
+		'special_group_names': {'data': 'data', 'columns': 'columns',
+								'units': 'units', 'description': 'description'},
+		'header_line_width': 80,
+		'chunk_size': 1024,
+		'hash_length': 32,
+		'header_bytes': 4096,
+		'stamp': 'pypelid',
+		'hashit': True,
+		'hash_info_len': 2,
+		'hash_algo_len': 1,
+		'hash_algorithm': 'blake2',
+		'preallocate_file': True,
+		'compression': {},
+		'title': 'PYPELID CATALOGUE',
+	}
 
-	DATA_GROUP = 'data'
-	COLUMNS_GROUP = 'columns'
-	UNITS_GROUP = 'units'
-	DESCRIPTION_GROUP = 'description'
-
-	_special_group_names = [DATA_GROUP, COLUMNS_GROUP, UNITS_GROUP, DESCRIPTION_GROUP]
-	headerlinewidth = 80
-
-	def __init__(self, filename, mode='a', chunk_size=1024, hash_length=32, header_bytes=4096, stamp='pypelid', 
-				hashit=True, hash_info_len=1, preallocate_file=True, compression={}):
-		"""     
-		filename - name of file to operate on
-		chunk_size - number of elements in chunk (should correspond to 1KB to 1MB)
-		hash_length - number of bytes reserved for the hash at the start of the file.
-		header_bytes - bytes reserved for the header at the start of the file.
-		stamp - string to print at the beginning of the header.
-		hashit - compute the hash
-		preallocate_file - data arrays will be initialized zero with size given by the max number of objects in the group.
-		compression - dictionary of paramters to be passed to create_dataset to enable compression.
-		"""
+	def __init__(self, filename, mode='a', preallocate_file=True, **input_params):
+		""" """
 		self.filename = filename
-		self.chunk_size = chunk_size
-		self.hash_length = hash_length
-		self.header_bytes = header_bytes
-		self.stamp = stamp
-		self.hashit = hashit
-		self.hash_info_len = hash_info_len
-		self.preallocate_file = preallocate_file
-		self.compression = compression
+
+		self.params = copy.deepcopy(self._default_params)
+
+		self.params['preallocate_file'] = preallocate_file
+
+		for key, value in input_params.items():
+			try:
+				self.params[key] = value
+			except KeyError:
+				logging.warning("Unrecognized argument passed to HDF5Catalogue (%s)" % key)
+
+		self._check_inputs()
+
 		self.readonly = False
+		if not mode in ('r', 'w', 'a'):
+			raise HDF5CatError("Invalid argument: mode must be one of ('r', 'w', 'a')")
+
 		if mode == 'r':
 			self.readonly = True
 			self.storage = h5py.File(filename, mode=mode)
 		else:
-			self.storage = h5py.File(filename, mode=mode, userblock_size=header_bytes)
+			self.storage = h5py.File(filename, mode=mode,
+									userblock_size=self.params['header_bytes'])
 
-		self.column_count = {}
+		# Flag to indicate completion of file allocation
+		self.allocation_done = False
+
+	def _check_inputs(self):
+		""" Sanity check arguments. """
+		assert self.params['hash_length'] > 1 and self.params['hash_length'] < 256
+		assert self.params['hash_info_len'] > 0
+		assert self.params['hash_algo_len'] == 1
+		assert self.params['hash_algorithm'] in hash_algorithms.values()
+		assert self.params['header_line_width'] > 0
+		assert self.params['header_bytes'] > 0
+		assert self.params['header_bytes'] > 0
+		assert self.params['preallocate_file'] in (True, False)
+		assert self.params['hashit'] in (True, False)
+		assert self.params['chunk_size'] is None or self.params['chunk_size'] > 0
+		assert isinstance(self.params['stamp'], str)
+		assert isinstance(self.params['title'], str)
 
 	def __enter__(self):
 		""" """
@@ -253,24 +328,25 @@ class HDF5Catalogue(object):
 	def get_data(self):
 		""" """
 		try:
-			return self.storage[self.DATA_GROUP]
+			return self.storage[self.params['special_group_names']['data']]
 		except KeyError:
-			raise NoData("File has no data")
+			raise HDF5CatError("File has no data")
 
 	def get_data_group(self, group_name):
 		""" """
-		return self.storage[self.DATA_GROUP][str(group_name)]
+		return self.storage[self.params['special_group_names']['data']][str(group_name)]
 
 	def update_attributes(self, attributes=None, **attrs):
 		"""Add attributes to the HDF5 file.
 		attributes - dictionary of attributes 
 					 (may also be specified as named arguments)
 		"""
-		if self.readonly: raise WriteError("File loaded in read-only mode.")
+		if self.readonly:
+			raise HDF5CatError("File loaded in read-only mode.")
 		if attributes is not None:
 			for key, value in attributes.items():
 				self.storage.attrs[key] = value
-				logging.debug("HDF5 set %s %s %s",key,value,self.storage.attrs[key])
+				logging.debug("HDF5 set %s %s %s", key, value, self.storage.attrs[key])
 		for key, value in attrs.items():
 			self.storage.attrs[key] = value
 
@@ -286,7 +362,7 @@ class HDF5Catalogue(object):
 		dtypes : list
 			List of tuples that are recognized by np.dtype
 		"""
-		data = {}
+		zero_data = {}
 		for t in dtypes:
 			try:
 				dtype = np.dtype(t)
@@ -294,7 +370,7 @@ class HDF5Catalogue(object):
 				dtype = np.dtype([t])
 
 			name = dtype.names[0]
-			data[name] = np.zeros(0, dtype=dtype[0])
+			zero_data[name] = np.zeros(0, dtype=dtype[0])
 			logging.debug("HDF5 added dataset %s with type %s.",name, dtype[0])
 
 		if not misc.check_is_iterable(group_names):
@@ -305,10 +381,12 @@ class HDF5Catalogue(object):
 		for i, group in enumerate(group_names):
 			try:
 				self.get_data_group(group)
-				raise Exception("Attempted to pre-allocate a group that already exists.")
+				raise HDF5CatError("Attempted to pre-allocate a group that already exists.")
 			except KeyError:
 				pass
-			self.update_data(data, group, nmax[i])
+			self.update_data(zero_data, group, nmax[i])
+
+		self.allocation_done = True
 
 	def update(self, group_arr, data):
 		""" Update multiple groups.
@@ -344,7 +422,7 @@ class HDF5Catalogue(object):
 
 	def _get_group_path(self, group_name):
 		""" Return the full path to the group """
-		return '%s/%s'%(self.DATA_GROUP, group_name)
+		return '%s/%s'%(self.params['special_group_names']['data'], group_name)
 
 	def update_data(self, group_data, group_name=0, nmax=None, ensure_group_does_not_exist=False):
 		""" Add catalogue data belonging to a single group.
@@ -356,9 +434,16 @@ class HDF5Catalogue(object):
 		nmax : int
 			maximum number of objects in the group.  Only used if preallocate_file is enabled.
 		"""
-		if self.readonly: raise WriteError("File loaded in read-only mode.")
+		if self.readonly:
+			raise HDF5CatError("File loaded in read-only mode.")
+
+		if self.params['preallocate_file'] and not self.allocation_done:
+			raise HDF5CatError('File was not allocated before call to update_data.')
+
+		# Expand the full path to the group
 		group_name = self._get_group_path(group_name)
 
+		# Create the group
 		group = self.storage.require_group(group_name)
 
 		# count attribute will track the length of the data columns
@@ -367,15 +452,17 @@ class HDF5Catalogue(object):
 
 		if nmax is not None and 'nmax' in group.attrs:
 			if group.attrs['nmax'] != nmax:
-				raise Exception("Cannot update group %s because supplied nmax is not consistent with group attributes."%group_name)
+				raise HDF5CatError("Cannot update group %s because supplied nmax is not consistent with group attributes."%group_name)
 
 		if nmax is not None and 'nmax' not in group.attrs:
 			group.attrs['nmax'] = nmax
 
 		column_info = {}
 
-		length_check = None # this variable will be used to ensure that all data arrays have the same length.
+		# this variable will be used to ensure that all data arrays have the same length.
+		length_check = None
 
+		# access the data column names (from either dict or numpy structured array)
 		try:
 			column_names = group_data.keys()
 		except AttributeError:
@@ -387,46 +474,48 @@ class HDF5Catalogue(object):
 			# Do a check of the length of the data array.
 			if length_check is not None:
 				if len(arr) != length_check:
-					raise Exception("The length of column %s does not match! length:%i expected:%i."%(name,len(arr),length_check))
+					raise HDF5CatError("The length of column %s does not match! length:%i expected:%i."%(name,len(arr),length_check))
 			length_check = len(arr)
 
 			if name in group:
 				# if the group already exists append the array to the dataset.
 				dim = group.attrs['count']
-				if not self.preallocate_file: group[name].resize(dim+arr.shape[0], axis=0)
-				if dim+len(arr) > group[name].shape[0]:
-					raise Exception("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
-				group[name][dim:dim+len(arr)] = arr
+				if not self.params['preallocate_file']:
+					group[name].resize(dim + arr.shape[0], axis=0)
+				if dim + len(arr) > group[name].shape[0]:
+					raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
+				group[name][dim:dim + len(arr)] = arr
 				#logging.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
 			else:
 				# catch the case when a new dataset is added that was not preallocated, but nmax of the group is already known.
 				if nmax is None and 'nmax' in group.attrs:
 					nmax = group.attrs['nmax']
 
-				if self.preallocate_file and nmax is None:
-					raise Exception("Cannot create dataset %s.%s because nmax must be specified to preallocate the hdf5 file."%(group_name,name))
+				if self.params['preallocate_file'] and nmax is None:
+					raise HDF5CatError("Cannot create dataset %s.%s because nmax must be specified to preallocate the hdf5 file."%(group_name,name))
 
 				# otherwise create a new dataset
-				if self.chunk_size is None:
+				if self.params['chunk_size'] is None:
 					chunkshape = None
 				else:
 					chunkshape = list(arr.shape)
-					chunkshape[0] = self.chunk_size
+					chunkshape[0] = self.params['chunk_size']
 					chunkshape = tuple(chunkshape)
 				maxshape = list(arr.shape)
 				maxshape[0] = nmax
-				if self.preallocate_file:
-					group.create_dataset(name, data=np.zeros(maxshape,dtype=arr.dtype), maxshape=maxshape, chunks=chunkshape, **self.compression)
+
+				if nmax < chunkshape[0]:
+					logging.debug("Dataset is too small for chunking (chunkshape %s, nmax %s)", chunkshape, nmax)
+					chunkshape = None
+
+				if self.params['preallocate_file']:
+					group.create_dataset(name, data=np.zeros(maxshape,dtype=arr.dtype), maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
 					if len(arr) > group[name].shape[0]:
-						raise Exception("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
+						raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
 					group[name][:len(arr)] = arr
 				else:
-					group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.compression)
+					group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
 				#logging.debug("create dataset: %s %s %s chunky:%s",name,group[name].shape,maxshape,group[name].chunks)
-
-			if not self.column_count.has_key(name):
-				self.column_count[name] = 0
-			self.column_count[name] += len(arr)
 
 			# determine the number of elements per data row if 2 dimensional
 			if len(arr.shape) <= 1:
@@ -438,12 +527,12 @@ class HDF5Catalogue(object):
 				dtype_string = str(arr.dtype[0])
 			except KeyError:
 				dtype_string = str(arr.dtype)
-			column_info[name] = "%i %s"%(dim, dtype_string)
+			column_info[name] = "%i %s" % (dim, dtype_string)
 
 		# update the count attribute with the length of the data arrays
 		group.attrs['count'] += len(arr)
 
-		self.update_metagroup(self.COLUMNS_GROUP, column_info)
+		self.update_metagroup(self.params['special_group_names']['columns'], column_info)
 
 	def update_metagroup(self, group_name, attributes, **attrs):
 		""" Create a group to store metadata.
@@ -453,11 +542,11 @@ class HDF5Catalogue(object):
 		attributes : dict
 			metadata key-value pairs
 		"""
-		if self.readonly: raise WriteError("File loaded in read-only mode.")
+		if self.readonly: raise HDF5CatError("File loaded in read-only mode.")
 		group = self.storage.require_group(group_name)
-		for key,value in attributes.items():
+		for key, value in attributes.items():
 			group.attrs[key] = value
-		for key,value in attrs.items():
+		for key, value in attrs.items():
 			group.attrs[key] = value
 
 	def get_metagroup(self, group_name):
@@ -466,24 +555,23 @@ class HDF5Catalogue(object):
 
 	def update_units(self, attributes, **attrs):
 		""" Update the units metadata group. """
-		self.update_metagroup(self.UNITS_GROUP, attributes, **attrs)
+		self.update_metagroup(self.params['special_group_names']['units'], attributes, **attrs)
 
 	def update_description(self, attributes, **attrs):
 		""" Update the description metadata group. """
-		self.update_metagroup(self.DESCRIPTION_GROUP, attributes, **attrs)
+		self.update_metagroup(self.params['special_group_names']['description'], attributes, **attrs)
 
 	def get_units(self):
 		""" Retrieve the units attributes """
-		return self.get_metagroup(self.UNITS_GROUP)
+		return self.get_metagroup(self.params['special_group_names']['units'])
 
 	def get_description(self):
 		""" Retrieve the description attributes """
-		return self.get_metagroup(self.DESCRIPTION_GROUP)
+		return self.get_metagroup(self.params['special_group_names']['description'])
 
 	def get_columns(self):
 		""" Retrieve the columns attributes """
-		return self.get_metagroup(self.COLUMNS_GROUP)
-
+		return self.get_metagroup(self.params['special_group_names']['columns'])
 
 	def close(self):
 		""" Write the HDF5 data to disk and then insert the human-readable header."""
@@ -502,7 +590,7 @@ class HDF5Catalogue(object):
 		header = StringIO.StringIO()
 		header.write(self.horizline(name))
 
-		for key,value in attrs.items():
+		for key, value in attrs.items():
 			header.write("%16s: %s\n"%(key,value))
 
 		header.write(self.horizline())
@@ -511,53 +599,55 @@ class HDF5Catalogue(object):
 
 	def horizline(self, title=""):
 		""" """
-		start = "_%s"%title
-		start += "_"*(self.headerlinewidth-len(start))
+		start = "_%s" % title
+		start += "_" * (self.params['header_line_width'] - len(start))
 		start += "\n"
 		return start
 
 	def write_header(self):
 		""" Insert a human-readable header at the start of the HDF5 file.
 		"""
-		if self.readonly: raise WriteError("File loaded in read-only mode.")
+		if self.readonly:
+			raise HDF5CatError("File loaded in read-only mode.")
 		# open the file to read the attributes
 		f = h5py.File(self.filename)
 
-		reserved = len(self.stamp) + self.hash_info_len
-		header_bytes = self.header_bytes - self.hash_length - reserved
+		reserved = len(self.params['stamp']) + self.params['hash_info_len'] + self.params['hash_algo_len']
+		header_bytes = self.params['header_bytes'] - self.params['hash_length'] - reserved
 		logging.debug("HDF5 File %s has header block size %i.", self.filename, header_bytes)
 
 		header = StringIO.StringIO()
-		header.write(" "*header_bytes)
+		header.write(" " * header_bytes)
 		header.seek(0)
 
 		header.write("\n")
-		header.write(("{:^%is}\n"%self.headerlinewidth).format("PYPELID CATALOGUE"))
+		header.write(("{:^%is}\n" % self.params['header_line_width']).format(self.params['title']))
 		header.write(self.horizline())
 
 		header.write(self.format_attr("file attributes", f.attrs))
 
 		for group_name in f:
-			if group_name in self._special_group_names: continue
+			if group_name in self.params['special_group_names'].values():
+				continue
 			header.write(self.format_attr(group_name, f[group_name].attrs))
 
 		# write the column description lines
 		header.write(self.horizline("data columns"))
-		if self.COLUMNS_GROUP in f:
-			for name,info in f[self.COLUMNS_GROUP].attrs.items():
+		if self.params['special_group_names']['columns'] in f:
+			for name, info in f[self.params['special_group_names']['columns']].attrs.items():
 				try:
-					unit = f[self.UNITS_GROUP].attrs[name]
+					unit = f[self.params['special_group_names']['units']].attrs[name]
 				except:
 					unit = ""
 				try:
-					desc = f[self.DESCRIPTION_GROUP].attrs[name]
+					desc = f[self.params['special_group_names']['description']].attrs[name]
 				except:
 					desc = ""
-				message = "{:^16s}|{:^10s}|{:^10s}| ".format(name,unit,info)
-				pad = min(self.headerlinewidth//2, len(message))
-				desc_lines = textwrap.wrap(desc,self.headerlinewidth-pad)
+				message = "{:^16s}|{:^10s}|{:^10s}| ".format(name, unit, info)
+				pad = min(self.params['header_line_width']//2, len(message))
+				desc_lines = textwrap.wrap(desc,self.params['header_line_width']-pad)
 				if len(desc_lines)>0:
-					if len(message) + len(desc_lines[0]) > self.headerlinewidth:
+					if len(message) + len(desc_lines[0]) > self.params['header_line_width']:
 						message += "\n"+" "*pad  # go to next line.
 					message += desc_lines[0] + "\n"
 					for line in desc_lines[1:]:
@@ -580,18 +670,28 @@ class HDF5Catalogue(object):
 			logging.critical("HDF5 header truncated to %i characters!  Your header may be corrupted.", len(head))
 
 		with open(self.filename, 'rb+') as f:
-			f.seek(self.hash_length + reserved)
+			f.seek(self.params['hash_length'] + reserved)
 			f.write(head)
 
-		if self.hashit and self.hash_length > 0 and self.hash_length < 256:
-			digest = hash_it(self.filename, self.hash_length, reserved=reserved, store_hash_in_file=True)
+		if self.params['hashit']:
+			digest = hash_it(self.filename, self.params['hash_length'],
+								reserved=reserved, store_hash_in_file=True,
+								algorithm=self.params['hash_algorithm'])
+
+			# look up algorithm code
+			algorithm_code = misc.dict_reverse_lookup(hash_algorithms, self.params['hash_algorithm'])
+
+			# convert hash length to hex
+			hash_len_code = format(self.params['hash_length'], str(self.params['hash_info_len']) + 'x')
+			assert len(hash_len_code) == self.params['hash_info_len']
 			# write the hash
 			with open(self.filename, 'rb+') as f:
-				f.write(self.stamp)
-				f.write(chr(self.hash_length))
+				f.write(self.params['stamp'])
+				f.write(hash_len_code)
+				f.write(algorithm_code)
 				f.write(digest)
 
-	def show(self, thing=None, pre="",level=0):
+	def show(self, thing=None, pre="", level=0):
 		""" Show what is in the file. """
 		if thing is None:
 			thing = self.storage
@@ -609,13 +709,13 @@ class HDF5Catalogue(object):
 
 		for key, value in thing.items():
 
-			if level==0:
+			if level == 0:
 				print("+ "),
 
 			if isinstance(value, h5py.Group):
 				s = str(value)
 			elif isinstance(value, h5py.Dataset):
-				if value.size==1:
+				if value.size == 1:
 					s = value[()]
 				else:
 					s = str(value)
@@ -626,10 +726,5 @@ class HDF5Catalogue(object):
 			self.show(value, pre+"\__",level+1)
 
 
-class FileValidationError(Exception):
+class HDF5CatError(Exception):
 	pass
-class WriteError(Exception):
-	pass
-class NoData(Exception):
-	pass
-
