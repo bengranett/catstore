@@ -18,6 +18,8 @@ class CatalogueStore(object):
 	Under the hood the survey is partitioned into zones using Healpix cells.  The resolution
 	is set by the zone_resolution parameter.
 
+	Additional name=value arguments will be stored in the meta data.
+
 	Parameters
 	----------
 	filename : str
@@ -31,16 +33,16 @@ class CatalogueStore(object):
 	----------------
 	zone_order : str
 		Zone ordering can be either healpix ring or nest ordering. (either 'ring' or 'nest')
-		Ring ordering is faster for querying.
+		Ring ordering is faster for querying.  (Default ring)
 	check_hash : bool
-		If True, check hash when opening file.
+		If True, check hash when opening file. (Default True)
 	require_hash : bool
-		Raise error if hash does not validate.
+		Raise error if hash does not validate. (Default True)
 	official_stamp : str
-		String used to prefice catalogue files.
+		String used to prefice catalogue files. (Default 'pypelid')
 
 	Notes
-	-----
+	--------
 	API to use to create a new catalogue file.
 
 		>>> data = {
@@ -51,13 +53,13 @@ class CatalogueStore(object):
 		>>>           np.dtype([('skycoord', float, 2)]),
 		>>>           np.dtype([('redshift', float, 1)])
 		>>>          ]
-		>>> units = {'skycoord': 'degree', 'redshift': redshift}
+		>>> units = {'skycoord': 'degree', 'redshift': 'redshift'}
 		>>> meta = {'coordsys': 'equatorial J2000'}
 		>>> with CatalogueStore(filename, 'w', name='test') as cat:
 		>>>     cat.preload(ra, dec)
 		>>>     cat.allocate(dtypes)
 		>>>     cat.update(data)
-		>>>     cat.update_attributes(meata)
+		>>>     cat.update_attributes(meta)
 		>>>     cat.update_units(units)
 		>>>     cat.update_description(description)
 
@@ -74,11 +76,16 @@ class CatalogueStore(object):
 	_required_columns = ('skycoord',)
 
 	def __init__(self, filename, mode='r', zone_resolution=1, zone_order=HP.RING,
-					check_hash=True, require_hash=True, official_stamp='pypelid', **metadata):
+					check_hash=True, require_hash=True, official_stamp='pypelid',
+					preallocate_file=True, **metadata):
 		""" """
+		HP.validate_resolution(zone_resolution)
+		HP.validate_order(zone_order)
+
 		self.h5file = None
 
 		self.filename = filename
+		self.preallocate_file = preallocate_file
 
 		self.zone_counts = None
 		self.zone_index = {}
@@ -152,11 +159,11 @@ class CatalogueStore(object):
 
 	def _open_pypelid(self, filename, mode='r'):
 		""" Load a pypelid catalogue store file. """
-		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode)
+		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode, preallocate_file=self.preallocate_file)
 		# access the data group
 		try:
 			self._datastore = self.h5file.get_data()
-		except hdf5tools.NoData:
+		except hdf5tools.HDF5CatError:
 			self._datastore = None
 		return self.h5file
 
@@ -165,7 +172,7 @@ class CatalogueStore(object):
 		if self.h5file is not None:
 			self.h5file.close()
 
-	def preload(self, lon, lat):
+	def preprocess(self, lon, lat, dtypes=None):
 		""" Run pre-processing needed before creating a new catalogue file.
 
 		Given longitude and latitude coordinates count number of objects in each zone
@@ -183,11 +190,14 @@ class CatalogueStore(object):
 		None
 		"""
 		if self.zone_counts is None:
-			self.zone_counts = np.zeros(self._hp_projector.npix)
+			self.zone_counts = np.zeros(self._hp_projector.npix, dtype=int)
 
 		zid = self._index(lon, lat)
 		counts = np.bincount(zid)
 		self.zone_counts[:len(counts)] += counts
+
+	# For backward compatability rename preprocess to preload
+	preload = preprocess
 
 	def allocate(self, dtypes):
 		""" Pre-allocate the file.
@@ -414,7 +424,7 @@ class CatalogueStore(object):
 
 		return structured_arr
 
-	def plot(self, plot_every=10, s=5., lw=0., cmap='jet'):
+	def plot(self, plot_every=1, s=5., lw=0., cmap='jet'):
 		""" Create a Mollweide projected plot of the objects.
 
 		Uses healpy for the spherical projection and matplotlib for the colormap.
@@ -437,10 +447,13 @@ class CatalogueStore(object):
 		sc = ScalarMappable(Normalize(0, len(self.get_zones())), cmap=cmap)
 
 		# initialize a mollweide map
+		tot = 0
+		counter = 0
 		hp.mollview(np.zeros(12) + float('nan'), cbar=False)
 		for data in self.get_data():
 			lon, lat = np.transpose(data['skycoord'])
-
+			counter += 1
+			print lon.shape
 			# select a subset of points
 			if plot_every > 1:
 				sel = np.random.choice(len(lon), len(lon) // plot_every)
@@ -452,8 +465,11 @@ class CatalogueStore(object):
 
 			# plot
 			hp.visufunc.projscatter(lon, lat, c=c, s=s, lw=lw, lonlat=True)
+			tot += len(lon)
 		hp.graticule()
 
+		print "number of groups",counter
+		print "number of points plotted",tot
 
 class ZoneDoesNotExist(Exception):
 	pass
