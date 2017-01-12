@@ -93,7 +93,7 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 	batch = max(1, len(ra)//10)
 
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
-		zone_resolution=zone_resolution, preallocate_file=False) as cat:
+		zone_resolution=zone_resolution, preallocate_file=True) as cat:
 
 		# load in the catalogue in batches
 		i = 0

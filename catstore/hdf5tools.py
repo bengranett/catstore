@@ -384,7 +384,7 @@ class HDF5Catalogue(object):
 				raise HDF5CatError("Attempted to pre-allocate a group that already exists.")
 			except KeyError:
 				pass
-			self.update_data(zero_data, group, nmax[i])
+			self.update_data(zero_data, group, nmax[i], preallocate=True)
 
 		self.allocation_done = True
 
@@ -424,7 +424,7 @@ class HDF5Catalogue(object):
 		""" Return the full path to the group """
 		return '%s/%s'%(self.params['special_group_names']['data'], group_name)
 
-	def update_data(self, group_data, group_name=0, nmax=None, ensure_group_does_not_exist=False):
+	def update_data(self, group_data, group_name=0, nmax=None, preallocate=False, ensure_group_does_not_exist=False):
 		""" Add catalogue data belonging to a single group.
 
 		group_data : dict or numpy structured array
@@ -437,8 +437,9 @@ class HDF5Catalogue(object):
 		if self.readonly:
 			raise HDF5CatError("File loaded in read-only mode.")
 
-		if self.params['preallocate_file'] and not self.allocation_done:
-			raise HDF5CatError('File was not allocated before call to update_data.')
+		if not preallocate:
+			if self.params['preallocate_file'] and not self.allocation_done:
+				raise HDF5CatError('File was not allocated before call to update_data.')
 
 		# Expand the full path to the group
 		group_name = self._get_group_path(group_name)
