@@ -47,7 +47,7 @@ def check_catalogue_store(n=100, zone_resolution=0):
 	check_lon = 0
 	check_lat = 0
 	with catalogue_store.CatalogueStore(filename) as cat:
-		print "count:", cat.h5file.get_attributes()['count']
+		print "count:", cat.get_attribute('count')
 		print "zones:", len(cat.get_zones())
 		for group in cat.get_data():
 			lon, lat = np.transpose(group['skycoord'])

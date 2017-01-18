@@ -297,6 +297,16 @@ class CatalogueStore(object):
 		for zone in self.get_zones():
 			yield self._datastore[zone]
 
+	def get_attribute(self, key):
+		""" Return the attribute by name.
+
+		Parameters
+		----------
+		key : str
+			Name of attribute to return.
+		"""
+		return self.h5file.get_attributes()[key]
+
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).
 
