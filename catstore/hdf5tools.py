@@ -268,6 +268,8 @@ class HDF5Catalogue(object):
 		'title': 'PYPELID CATALOGUE',
 	}
 
+	attributes = {}
+
 	def __init__(self, filename, mode='a', preallocate_file=True, **input_params):
 		""" """
 		self.filename = filename
@@ -275,6 +277,9 @@ class HDF5Catalogue(object):
 		self.params = copy.deepcopy(self._default_params)
 
 		self.params['preallocate_file'] = preallocate_file
+
+		self.attributes = {}
+		self.data = None
 
 		for key, value in input_params.items():
 			try:
@@ -294,6 +299,12 @@ class HDF5Catalogue(object):
 		else:
 			self.storage = h5py.File(filename, mode=mode,
 									userblock_size=self.params['header_bytes'])
+
+		self.attributes = self.storage.attrs
+		try:
+			self.data = self.storage[self.params['special_group_names']['data']]
+		except KeyError:
+			self.data = None
 
 		# Flag to indicate completion of file allocation
 		self.allocation_done = False
@@ -321,12 +332,13 @@ class HDF5Catalogue(object):
 		""" ensure the hdf5 file is closed. """
 		self.close()
 
-	def get_attributes(self):
+	def __getattr__(self, key):
 		""" """
-		return self.storage.attrs
+		return self.storage.attrs[key]
 
 	def get_data(self):
 		""" """
+		logging.warning("HDF5Catalogue.get_data() is depricated. Use .data attribute instead.")
 		try:
 			return self.storage[self.params['special_group_names']['data']]
 		except KeyError:
@@ -533,7 +545,12 @@ class HDF5Catalogue(object):
 		# update the count attribute with the length of the data arrays
 		group.attrs['count'] += len(arr)
 
+		# create data alias
+		if self.data is None:
+			self.data = self.storage[self.params['special_group_names']['data']]
+
 		self.update_metagroup(self.params['special_group_names']['columns'], column_info)
+
 
 	def update_metagroup(self, group_name, attributes, **attrs):
 		""" Create a group to store metadata.

@@ -38,18 +38,21 @@ def check_catalogue_store(n=100, zone_resolution=0):
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=False) as cat:
 		cat.update(data)
+		cat.update_attributes(test='ciao')
 		cat.update_attributes(meta)
 		cat.update_units(units)
 		cat.update_description(description)
+		assert(cat._datastore is not None)
 
 	# Compute check sums
 	count = 0
 	check_lon = 0
 	check_lat = 0
 	with catalogue_store.CatalogueStore(filename) as cat:
-		print "count:", cat.get_attribute('count')
+		print "count:", cat.count
+		assert(cat.test == 'ciao')
 		print "zones:", len(cat.get_zones())
-		for group in cat.get_data():
+		for group in cat:
 			lon, lat = np.transpose(group['skycoord'])
 			count += len(lon)
 			check_lon += np.sum(lon)

@@ -83,6 +83,8 @@ class CatalogueStore(object):
 		HP.validate_order(zone_order)
 
 		self.h5file = None
+		self._datastore = None
+		self.attributes = {}
 
 		self.filename = filename
 		self.preallocate_file = preallocate_file
@@ -101,13 +103,12 @@ class CatalogueStore(object):
 
 		self.readonly = False
 		self._open_pypelid(filename, mode=mode)
-
-		self.metadata = metadata
 		self.zone_resolution = zone_resolution
 		self.zone_order = zone_order
-		self.metadata['partition_scheme'] = self.HEALPIX
-		self.metadata['zone_resolution'] = zone_resolution
-		self.metadata['zone_order'] = zone_order
+		metadata['partition_scheme'] = self.HEALPIX
+		metadata['zone_resolution'] = zone_resolution
+		metadata['zone_order'] = zone_order
+		self.update_attributes(metadata)
 		self._hp_projector = HP.HealpixProjector(resolution=self.zone_resolution,
 												order=self.zone_order)
 
@@ -120,22 +121,18 @@ class CatalogueStore(object):
 									official_stamp=official_stamp)
 
 		with hdf5tools.HDF5Catalogue(self.filename, mode='r') as h5file:
-			# import all attributes in the file.
-			self.metadata = {}
-			for key, value in h5file.get_attributes().items():
-				self.metadata[key] = value
 
 			# ensure that required attributes are there with acceptable values.
 			for key, options in self._required_attributes.items():
 				try:
-					assert(self.metadata[key] in options)
+					assert(h5file.attributes[key] in options)
 				except KeyError:
 					raise Exception("Cannot load %s: attribute is missing: %s"%(self.filename,key))
 				except AssertionError:
-					raise Exception("Cannot load %s: invalid attribute: %s:%s (expected %s)"%(self.filename,key,self.metadata[key],options))
+					raise Exception("Cannot load %s: invalid attribute: %s:%s (expected %s)"%(self.filename,key,h5file.attributes[key],options))
 
-			self.zone_resolution = self.metadata['zone_resolution']
-			self.zone_order = self.metadata['zone_order']
+			self.zone_resolution = h5file.attributes['zone_resolution']
+			self.zone_order = h5file.attributes['zone_order']
 
 			# ensure that required datasets are there
 			for column_name in self._required_columns:
@@ -157,6 +154,14 @@ class CatalogueStore(object):
 		""" """
 		self._close_pypelid()
 
+	def __getitem__(self, key):
+		""" Get a zone by name. """
+		return self._datastore(key)
+
+	def __getattr__(self, key):
+		""" """
+		return self.attributes[key]
+
 	def __iter__(self):
 		""" """
 		self._iter_zone_index = 0
@@ -176,10 +181,14 @@ class CatalogueStore(object):
 		""" Load a pypelid catalogue store file. """
 		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode, preallocate_file=self.preallocate_file)
 		# access the data group
+		self._datastore = self.h5file.data
+
 		try:
-			self._datastore = self.h5file.get_data()
-		except hdf5tools.HDF5CatError:
-			self._datastore = None
+			self.attributes = self.h5file.attributes
+		except:
+			self.attributes = {}
+			raise
+
 		return self.h5file
 
 	def _close_pypelid(self):
@@ -245,11 +254,14 @@ class CatalogueStore(object):
 		zone_index = self._index(*data['skycoord'].transpose())
 		self.h5file.update(zone_index, data)
 
-		if not self.metadata.has_key('count'):
-			self.metadata['count'] = 0
+		self._datastore = self.h5file.data
+
+		try:
+			self.attributes['count']
+		except KeyError:
+			self.attributes['count'] = 0
 		key, arr = data.items()[0]
-		self.metadata['count'] += len(arr)
-		self.update_attributes(self.metadata)
+		self.attributes['count'] += len(arr)
 
 	def update_attributes(self, attrib=None, **args):
 		""" Update file metadata.
@@ -286,7 +298,7 @@ class CatalogueStore(object):
 
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
-		if self.metadata['partition_scheme'] == self.HEALPIX:
+		if self.attributes['partition_scheme'] == self.HEALPIX:
 			return self._hp_projector.ang2pix(lon, lat)
 		return self.ZONE_ZERO
 
@@ -320,7 +332,7 @@ class CatalogueStore(object):
 		key : str
 			Name of attribute to return.
 		"""
-		return self.h5file.get_attributes()[key]
+		return self.attributes[key]
 
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).
@@ -450,10 +462,10 @@ class CatalogueStore(object):
 
 		# construct a catalogue object
 		metadata = {}
-		for key, value in self.h5file.get_attributes().items():
+		for key, value in self.attributes.items():
 			metadata[key] = value
 		cat = catalogue.Catalogue(data=structured_arr,
-								metadata=self.metadata,
+								metadata=metadata,
 								center=(clon, clat))
 
 		return cat
@@ -484,7 +496,7 @@ class CatalogueStore(object):
 		tot = 0
 		counter = 0
 		hp.mollview(np.zeros(12) + float('nan'), cbar=False)
-		for data in self.get_data():
+		for data in self:
 			lon, lat = np.transpose(data['skycoord'])
 			counter += 1
 			print lon.shape
