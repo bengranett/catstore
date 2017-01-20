@@ -338,8 +338,7 @@ class CatalogueStore(object):
 				continue
 
 			# access longitude and latitude...
-			lon = np.transpose(data['skycoord']['ra'])
-			lat = np.transpose(data['skycoord']['dec'])
+			lon, lat = np.transpose(data['skycoord'])
 			cat_xyz = sphere.lonlat2xyz(lon, lat)
 
 			mu = np.dot(xyz, cat_xyz)
@@ -408,7 +407,7 @@ class CatalogueStore(object):
 
 		Returns
 		-------
-		ndarray : catalogue stored as a numpy structured array
+		Catalogue : Catalogue object
 		"""
 		data_dict = {}
 
@@ -428,11 +427,21 @@ class CatalogueStore(object):
 			lon, lat = np.transpose(data_dict['skycoord'])
 			ximage, yimage = transform(lon, lat)
 			data_dict['imagecoord'] = np.transpose([ximage, yimage])
+		else:
+			data_dict['imagecoord'] = data_dict['skycoord']
 
 		# construct a structured array
 		structured_arr = misc.dict_to_structured_array(data_dict)
 
-		return structured_arr
+		# construct a catalogue object
+		metadata = {}
+		for key, value in self.h5file.get_attributes().items():
+			metadata[key] = value
+		cat = catalogue.Catalogue(data=structured_arr,
+								metadata=self.metadata,
+								center=(clon, clat))
+
+		return cat
 
 	def plot(self, plot_every=1, s=5., lw=0., cmap='jet'):
 		""" Create a Mollweide projected plot of the objects.
