@@ -157,6 +157,21 @@ class CatalogueStore(object):
 		""" """
 		self._close_pypelid()
 
+	def __iter__(self):
+		""" """
+		self._iter_zone_index = 0
+		self._iter_zone_list = self._datastore.keys()
+		return self
+
+	def next(self):
+		""" """
+		try:
+			zone = self._iter_zone_list[self._iter_zone_index]
+			self._iter_zone_index += 1
+			return self._datastore[zone]
+		except IndexError:
+			raise StopIteration()
+
 	def _open_pypelid(self, filename, mode='r'):
 		""" Load a pypelid catalogue store file. """
 		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode, preallocate_file=self.preallocate_file)
