@@ -146,12 +146,13 @@ class CatalogueStore(object):
 												order=self.zone_order)
 		self._datastore = None
 
+	def __str__(self):
+		return self.filename
+
 	def __enter__(self):
-		""" """
 		return self
 
 	def __exit__(self, type, value, traceback):
-		""" """
 		self._close_pypelid()
 
 	def __getitem__(self, key):
