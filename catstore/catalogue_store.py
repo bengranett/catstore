@@ -169,6 +169,9 @@ class CatalogueStore(object):
 		self._iter_zone_list = self._datastore.keys()
 		return self
 
+	def __len__(self):
+		return len(self._datastore)
+
 	def next(self):
 		""" """
 		try:
