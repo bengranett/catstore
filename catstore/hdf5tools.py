@@ -1,4 +1,5 @@
 """ hdf5tools.py """
+import os
 import numpy as np
 from pypelid.utils import misc
 import h5py
@@ -268,6 +269,7 @@ class HDF5Catalogue(object):
 		'preallocate_file': True,
 		'compression': {},
 		'title': 'PYPELID CATALOGUE',
+		'overwrite': False
 	}
 
 
@@ -295,6 +297,10 @@ class HDF5Catalogue(object):
 		self.readonly = False
 		if not mode in ('r', 'w', 'a'):
 			raise HDF5CatError("Invalid argument: mode must be one of ('r', 'w', 'a')")
+
+		if mode == 'w':
+			if os.path.exists(filename) and not self.params['overwrite']:
+				raise HDF5CatError("File %s exists.  Will not overwrite."%filename)
 
 		if mode == 'r':
 			self.readonly = True
@@ -334,6 +340,10 @@ class HDF5Catalogue(object):
 	def __exit__(self, type, value, traceback):
 		""" ensure the hdf5 file is closed. """
 		self.close()
+
+	def __str__(self):
+		""" """
+		return "< {}: {} >".format(self.__class__.__name__, self.filename)
 
 	def __getattr__(self, key):
 		""" """
