@@ -250,6 +250,8 @@ class HDF5Catalogue(object):
 		dictionary of paramters to be passed to create_dataset (may be used to
 		enable compression).
 	"""
+	logger = logging.getLogger(__name__)
+
 	# These default parameters will be deep-copied in on initialization.
 	_default_params = {
 		'special_group_names': {'data': 'data', 'columns': 'columns',
@@ -268,6 +270,7 @@ class HDF5Catalogue(object):
 		'title': 'PYPELID CATALOGUE',
 	}
 
+
 	attributes = {}
 
 	def __init__(self, filename, mode='a', preallocate_file=True, **input_params):
@@ -285,7 +288,7 @@ class HDF5Catalogue(object):
 			try:
 				self.params[key] = value
 			except KeyError:
-				logging.warning("Unrecognized argument passed to HDF5Catalogue (%s)" % key)
+				self.logger.warning("Unrecognized argument passed to HDF5Catalogue (%s)" % key)
 
 		self._check_inputs()
 
@@ -338,7 +341,7 @@ class HDF5Catalogue(object):
 
 	def get_data(self):
 		""" """
-		logging.warning("HDF5Catalogue.get_data() is depricated. Use .data attribute instead.")
+		self.logger.warning("HDF5Catalogue.get_data() is depricated. Use .data attribute instead.")
 		try:
 			return self.storage[self.params['special_group_names']['data']]
 		except KeyError:
@@ -358,7 +361,7 @@ class HDF5Catalogue(object):
 		if attributes is not None:
 			for key, value in attributes.items():
 				self.storage.attrs[key] = value
-				logging.debug("HDF5 set %s %s %s", key, value, self.storage.attrs[key])
+				self.logger.debug("HDF5 set %s %s %s", key, value, self.storage.attrs[key])
 		for key, value in attrs.items():
 			self.storage.attrs[key] = value
 
@@ -383,7 +386,7 @@ class HDF5Catalogue(object):
 
 			name = dtype.names[0]
 			zero_data[name] = np.zeros(0, dtype=dtype[0])
-			logging.debug("HDF5 added dataset %s with type %s.",name, dtype[0])
+			self.logger.debug("HDF5 added dataset %s with type %s.",name, dtype[0])
 
 		if not misc.check_is_iterable(group_names):
 			group_names = [group_names]
@@ -498,7 +501,7 @@ class HDF5Catalogue(object):
 				if dim + len(arr) > group[name].shape[0]:
 					raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
 				group[name][dim:dim + len(arr)] = arr
-				#logging.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
+				#self.logger.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
 			else:
 				# catch the case when a new dataset is added that was not preallocated, but nmax of the group is already known.
 				if nmax is None and 'nmax' in group.attrs:
@@ -518,7 +521,7 @@ class HDF5Catalogue(object):
 				maxshape[0] = nmax
 
 				if nmax < chunkshape[0]:
-					logging.debug("Dataset is too small for chunking (chunkshape %s, nmax %s)", chunkshape, nmax)
+					self.logger.debug("Dataset is too small for chunking (chunkshape %s, nmax %s)", chunkshape, nmax)
 					chunkshape = None
 
 				if self.params['preallocate_file']:
@@ -528,7 +531,7 @@ class HDF5Catalogue(object):
 					group[name][:len(arr)] = arr
 				else:
 					group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
-				#logging.debug("create dataset: %s %s %s chunky:%s",name,group[name].shape,maxshape,group[name].chunks)
+				#self.logger.debug("create dataset: %s %s %s chunky:%s",name,group[name].shape,maxshape,group[name].chunks)
 
 			# determine the number of elements per data row if 2 dimensional
 			if len(arr.shape) <= 1:
@@ -632,7 +635,7 @@ class HDF5Catalogue(object):
 
 		reserved = len(self.params['stamp']) + self.params['hash_info_len'] + self.params['hash_algo_len']
 		header_bytes = self.params['header_bytes'] - self.params['hash_length'] - reserved
-		logging.debug("HDF5 File %s has header block size %i.", self.filename, header_bytes)
+		self.logger.debug("HDF5 File %s has header block size %i.", self.filename, header_bytes)
 
 		header = StringIO.StringIO()
 		header.write(" " * header_bytes)
@@ -685,7 +688,7 @@ class HDF5Catalogue(object):
 
 		if len(head) > header_bytes:
 			head = head[:header_bytes]
-			logging.critical("HDF5 header truncated to %i characters!  Your header may be corrupted.", len(head))
+			self.logger.critical("HDF5 header truncated to %i characters!  Your header may be corrupted.", len(head))
 
 		with open(self.filename, 'rb+') as f:
 			f.seek(self.params['hash_length'] + reserved)
