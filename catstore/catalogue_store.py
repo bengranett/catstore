@@ -65,6 +65,8 @@ class CatalogueStore(object):
 
 	"""
 
+	logger = logging.getLogger(__name__)
+
 	# Define sky partition mode constants
 	ZONE_ZERO = 0
 	FULLSKY = 'FULLSKY'
@@ -77,7 +79,7 @@ class CatalogueStore(object):
 
 	def __init__(self, filename, mode='r', zone_resolution=1, zone_order=HP.RING,
 					check_hash=True, require_hash=True, official_stamp='pypelid',
-					preallocate_file=True, **metadata):
+					preallocate_file=True, overwrite=False, **metadata):
 		""" """
 		HP.validate_resolution(zone_resolution)
 		HP.validate_order(zone_order)
@@ -92,14 +94,22 @@ class CatalogueStore(object):
 		self.zone_counts = None
 		self.zone_index = {}
 
+		self.readonly = False
+
+		if mode not in ('r', 'w', 'a'):
+			raise CatStoreError("Invalid argument: mode must be one of ('r', 'w', 'a')")
+
 		if os.path.exists(filename):
-			if mode != 'r':
-				logging.warning("Catalogue files are read-only.  Cannot modify %s.", filename)
-			self.readonly = True
-			self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash,
-									official_stamp=official_stamp)
-			self._open_pypelid(filename, mode=mode)
-			return
+			if mode == 'w':
+				if not self.overwrite:
+					raise CatStoreError("File %s exists.  Will not overwrite."%filename)
+			else:  # mode is r or a
+				if mode == 'r':
+					self.readonly = True
+				self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash,
+										official_stamp=official_stamp)
+				self._open_pypelid(filename, mode=mode)
+				return
 
 		self.readonly = False
 		self._open_pypelid(filename, mode=mode)
@@ -235,10 +245,10 @@ class CatalogueStore(object):
 		dtypes : list of numpy dtypes
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s", self.filename)
+			self.logger.warning("File is readonly! %s", self.filename)
 			return
 		index, = np.where(self.zone_counts)
-		logging.debug("Preallocating group IDs: %s", index)
+		self.logger.debug("Preallocating group IDs: %s", index)
 		self.h5file.preallocate_groups(index, self.zone_counts[index], dtypes=dtypes)
 
 	def update(self, data):
@@ -249,7 +259,7 @@ class CatalogueStore(object):
 		data : dict or numpy structured array
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s", self.filename)
+			self.logger.warning("File is readonly! %s", self.filename)
 			return
 
 		if 'skycoord' not in data:
@@ -274,7 +284,7 @@ class CatalogueStore(object):
 			key-value pairs
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s", self.filename)
+			self.logger.warning("File is readonly! %s", self.filename)
 			return
 		self.h5file.update_attributes(attrib, **args)
 
@@ -285,7 +295,7 @@ class CatalogueStore(object):
 			dictionary with column names and units
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s", self.filename)
+			self.logger.warning("File is readonly! %s", self.filename)
 			return
 		self.h5file.update_units(attrib)
 
@@ -296,7 +306,7 @@ class CatalogueStore(object):
 			dictionary with column names and description
 		"""
 		if self.readonly:
-			logging.warning("File is readonly! %s", self.filename)
+			self.logger.warning("File is readonly! %s", self.filename)
 			return
 		self.h5file.update_description(attrib)
 
@@ -316,7 +326,7 @@ class CatalogueStore(object):
 	def _which_zones(self, lon, lat, radius):
 		""" Determine which zones overlap the points (lon,lat) within the radius."""
 		zones = self._hp_projector.query_disc(lon, lat, radius)
-		logging.debug("querying %f,%f... zones found: %s", lon, lat, zones)
+		self.logger.debug("querying %f,%f... zones found: %s", lon, lat, zones)
 		return zones
 
 	def get_zones(self):
@@ -528,6 +538,9 @@ class CatalogueStore(object):
 
 		print "number of groups",counter
 		print "number of points plotted",tot
+
+class CatStoreError(Exception):
+	pass
 
 class ZoneDoesNotExist(Exception):
 	pass
