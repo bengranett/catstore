@@ -69,12 +69,12 @@ class Catalogue(object):
 		# if the attribute is a column name in the data table, return the column
 		try:
 			return self.__dict__['_data'][key]
-		except KeyError:
-			raise AttributeError
-		except IndexError:
-			raise AttributeError
-		except ValueError:
-			raise AttributeError
+		except KeyError as e:
+			raise AttributeError(e.message)
+		except IndexError as e:
+			raise AttributeError(e.message)
+		except ValueError as e:
+			raise AttributeError(e.message)
 
 	def __setattr__(self, key, value):
 		""" Set a catalogue attribute.  

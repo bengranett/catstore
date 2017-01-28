@@ -169,6 +169,9 @@ class CatalogueStore(object):
 		self._iter_zone_list = self._datastore.keys()
 		return self
 
+	def __len__(self):
+		return len(self._datastore)
+
 	def next(self):
 		""" """
 		try:
@@ -437,9 +440,17 @@ class CatalogueStore(object):
 		-------
 		Catalogue : Catalogue object
 		"""
+
+		# Raise error if data has not yet been loaded
+		if self._datastore is None: raise Exception('You cannot retrieve from an empty catalogue!')
+
 		data_dict = {}
 
 		matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
+		logging.debug('Found ' + str(len(matches)) + ' objects at (' + str(clon) + ',' + str(clat) + ').')
+
+		# Return none if no objects fall into the rectangle
+		if len(matches)==0: return None
 
 		for zone, selection in matches.items():
 			data = self._retrieve_zone(zone)
