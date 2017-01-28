@@ -376,8 +376,15 @@ class CatalogueStore(object):
 
 	def get_data(self):
 		""" A generating function that returns the hdf5 groups."""
+		metadata = {}
+		for key, value in self._attributes.items():
+			metadata[key] = value
+
 		for zone in self.get_zones():
-			yield self._datastore[zone]
+			# construct a catalogue object
+			cat = catalogue.Catalogue(data=self._datastore[zone],
+								metadata=metadata)
+			yield cat
 
 	def get_attribute(self, key):
 		""" Return the attribute by name.

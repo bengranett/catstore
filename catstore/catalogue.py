@@ -10,9 +10,10 @@ from pypelid.utils import sphere, misc
 
 class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
+	logger = logging.getLogger(__name__)
 
 	_coordinate_system = 'equatorial'
-	_required_columns = ('imagecoord','mag')
+	_required_columns = ()
 	_required_meta = ()
 	_immutable_attributes = ('_coordinate_system', '_required_columns', '_required_meta', '_immutable_attributes')
 
@@ -27,7 +28,6 @@ class Catalogue(object):
 			dictionary of metadata, should include at least:
 			catalogue name, zone_resolution, zone_list, a centre tuple
 		"""
-		
 		# process the input meta data
 		meta = {}
 		if metadata is not None:
@@ -36,7 +36,7 @@ class Catalogue(object):
 		for key, value in attrs.items():
 			meta[key] = value
 
-		for key in self._required_meta: 
+		for key in self._required_meta:
 			if key not in meta:
 				raise Exception('Meta key %s not found. It is needed in Catalogue metadata!'%key)
 
@@ -49,6 +49,19 @@ class Catalogue(object):
 		self.__dict__['_data'] = {}
 		if data is not None:
 			self.load(data)
+
+		self._spatial_key = None
+		try:
+			self._data['imagecoord']
+			self._spatial_key = 'imagecoord'
+		except KeyError:
+			try:
+				self._data['skycoord']
+				self._spatial_key = 'skycoord'
+			except KeyError:
+				self.logger.warning("Need imagecoord or skycoord to make spatial queries.")
+		self.logger.debug("Using %s for spatial index", self._spatial_key)
+
 
 	def __getattr__(self, key):
 		""" Return columns by name 
@@ -87,10 +100,12 @@ class Catalogue(object):
 		value
 
 		"""
-
-		if self.__dict__['_data'].has_key(key):
+		try:
+			self.__dict__['_data'][key]
 			raise CatalogueError("Data table is read-only.")
-		elif key in self._immutable_attributes:
+		except KeyError:
+			pass
+		if key in self._immutable_attributes:
 			raise CatalogueError(str(key) + ' is read-only.')
 
 		# otherwise set the class variable
@@ -116,10 +131,15 @@ class Catalogue(object):
 			if not data.dtype.fields:
 				raise TypeError('The Catalogue class must be loaded with a structured array!')
 		except AttributeError:
-			raise TypeError('The Catalogue class must be loaded with a structured array!')
+			try:
+				data.items()
+			except AttributeError:
+				raise TypeError('The Catalogue class must be loaded with a dictionary-like structure or numpy structured array!')
 
 		for column in self._required_columns:
-			if not column in data.dtype.names:
+			try:
+				data[column]
+			except KeyError:
 				raise Exception('Data array is missing a required column: %s'%column)
 
 		self.__dict__['_data'] = data
@@ -137,7 +157,7 @@ class Catalogue(object):
 		""" Initialize the data structure for fast spatial lookups.
 
 		"""
-		xy = self.__dict__['_data']['imagecoord']
+		xy = self.__dict__['_data'][self._spatial_key]
 		self._lookup_tree = KDTree(xy)
 
 	def query_disk(self, x, y, radius=1.):
@@ -207,7 +227,7 @@ class Catalogue(object):
 
 		matches = self.query_disk(cx,cy,r)
 
-		data_x, data_y = np.transpose(self.__dict__['_data']['imagecoord'])
+		data_x, data_y = np.transpose(self.__dict__['_data'][_spatial_key])
 
 		results = []
 		for i, match in enumerate(matches):
@@ -235,7 +255,7 @@ class Catalogue(object):
 			Maximum number of objects to show in the plot.
 
 		"""
-		xy = self.__dict__['_data']['imagecoord']
+		xy = self.__dict__['_data'][_spatial_key]
 
 		# Subsample a big catalogue
 		if len(self) > nplot:
