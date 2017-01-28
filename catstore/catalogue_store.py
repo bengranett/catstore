@@ -234,17 +234,18 @@ class CatalogueStore(object):
 			self._attributes = {}
 			raise
 
-		if 'zone_counts' not in self._metadata:
-			self._metadata['zone_counts'] = np.zeros(self._hp_projector.npix, dtype=int)
+		if mode is not 'r':
+			if 'zone_counts' not in self._metadata:
+				self._metadata['zone_counts'] = np.zeros(self._hp_projector.npix, dtype=int)
 
-		if 'allocation_done' not in self._metadata:
-			self._metadata['allocation_done'] = False
+			if 'allocation_done' not in self._metadata:
+				self._metadata['allocation_done'] = False
 
-		if 'preallocate_file' not in self._metadata:
-			self._metadata['preallocate_file'] = self.params['preallocate_file']
+			if 'preallocate_file' not in self._metadata:
+				self._metadata['preallocate_file'] = self.params['preallocate_file']
 
-		if 'done' not in self._metadata:
-			self._metadata['done'] = False
+			if 'done' not in self._metadata:
+				self._metadata['done'] = False
 
 		return self._h5file
 

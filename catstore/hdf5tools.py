@@ -314,17 +314,18 @@ class HDF5Catalogue(object):
 		self.data = self.storage.require_group(self.params['special_group_names']['data'])
 		self.metadata = self.data.attrs
 
-		# Store metadata about file allocation
-		if 'preallocate_file' not in self.metadata:
-			self.metadata['preallocate_file'] = self.params['preallocate_file']
+		if mode is not 'r':
+			# Store metadata about file allocation
+			if 'preallocate_file' not in self.metadata:
+				self.metadata['preallocate_file'] = self.params['preallocate_file']
 
-		# Flag to indicate completion of file allocation
-		if 'allocation_done' not in self.metadata:
-			self.metadata['allocation_done'] = False
+			# Flag to indicate completion of file allocation
+			if 'allocation_done' not in self.metadata:
+				self.metadata['allocation_done'] = False
 
-		# Flag to indicate that all data that was preallocated has been loaded
-		if 'done' not in self.metadata:
-			self.metadata['done'] = False
+			# Flag to indicate that all data that was preallocated has been loaded
+			if 'done' not in self.metadata:
+				self.metadata['done'] = False
 
 
 	def _check_inputs(self):

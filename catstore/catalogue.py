@@ -50,7 +50,8 @@ class Catalogue(object):
 		if data is not None:
 			self.load(data)
 
-		self._spatial_key = None
+		self.__dict__['_spatial_key'] = None
+		print self._spatial_key
 		try:
 			self._data['imagecoord']
 			self._spatial_key = 'imagecoord'
@@ -104,6 +105,8 @@ class Catalogue(object):
 			self.__dict__['_data'][key]
 			raise CatalogueError("Data table is read-only.")
 		except KeyError:
+			pass
+		except ValueError:
 			pass
 		if key in self._immutable_attributes:
 			raise CatalogueError(str(key) + ' is read-only.')
