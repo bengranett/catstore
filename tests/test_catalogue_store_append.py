@@ -77,8 +77,8 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 	check_lon = 0
 	check_lat = 0
 	with catalogue_store.CatalogueStore(filename) as cat:
-		print "zones:", len(cat.get_zones())
-		for group in cat.get_data():
+		print "zones:", len(cat)
+		for group in cat:
 			lon, lat = np.transpose(group['skycoord'])
 			count += len(lon)
 			check_lon += np.sum(lon)
