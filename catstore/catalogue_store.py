@@ -102,9 +102,9 @@ class CatalogueStore(object):
 
 		self._check_inputs()
 
-		self.h5file = None
+		self._h5file = None
 		self._datastore = None
-		self.attributes = {}
+		self._attributes = {}
 
 		self.filename = filename
 
@@ -190,9 +190,9 @@ class CatalogueStore(object):
 	def __getattr__(self, key):
 		""" """
 		try:
-			return self.attributes[key]
+			return self._attributes[key]
 		except KeyError:
-			return self.metadata[key]
+			return self._metadata[key]
 
 	def __iter__(self):
 		""" """
@@ -214,38 +214,38 @@ class CatalogueStore(object):
 
 	def _open_pypelid(self, filename, mode='r'):
 		""" Load a pypelid catalogue store file. """
-		self.h5file = hdf5tools.HDF5Catalogue(filename,
+		self._h5file = hdf5tools.HDF5Catalogue(filename,
 											mode=mode,
 											preallocate_file=self.params['preallocate_file'],
 											overwrite=self.params['overwrite'])
 		# access the data group
-		self._datastore = self.h5file.data
-		self.metadata = self.h5file.metadata
+		self._datastore = self._h5file.data
+		self._metadata = self._h5file.metadata
 
 		try:
-			self.attributes = self.h5file.attributes
+			self._attributes = self._h5file.attributes
 		except:
-			self.attributes = {}
+			self._attributes = {}
 			raise
 
-		if 'zone_counts' not in self.metadata:
-			self.metadata['zone_counts'] = np.zeros(self._hp_projector.npix, dtype=int)
+		if 'zone_counts' not in self._metadata:
+			self._metadata['zone_counts'] = np.zeros(self._hp_projector.npix, dtype=int)
 
-		if 'allocation_done' not in self.metadata:
-			self.metadata['allocation_done'] = False
+		if 'allocation_done' not in self._metadata:
+			self._metadata['allocation_done'] = False
 
-		if 'preallocate_file' not in self.metadata:
-			self.metadata['preallocate_file'] = self.params['preallocate_file']
+		if 'preallocate_file' not in self._metadata:
+			self._metadata['preallocate_file'] = self.params['preallocate_file']
 
-		if 'done' not in self.metadata:
-			self.metadata['done'] = False
+		if 'done' not in self._metadata:
+			self._metadata['done'] = False
 
-		return self.h5file
+		return self._h5file
 
 	def _close_pypelid(self):
 		""" """
-		if self.h5file is not None:
-			self.h5file.close()
+		if self._h5file is not None:
+			self._h5file.close()
 
 	def preprocess(self, lon, lat, dtypes=None):
 		""" Run pre-processing needed before creating a new catalogue file.
@@ -264,13 +264,13 @@ class CatalogueStore(object):
 		-------
 		None
 		"""
-		zone_counts = self.metadata['zone_counts']
+		zone_counts = self._metadata['zone_counts']
 
 		zid = self._index(lon, lat)
 		counts = np.bincount(zid)
 		zone_counts[:len(counts)] += counts
 
-		self.metadata['zone_counts'] = zone_counts
+		self._metadata['zone_counts'] = zone_counts
 
 	# For backward compatability rename preprocess to preload
 	preload = preprocess
@@ -286,11 +286,11 @@ class CatalogueStore(object):
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
 
-		zone_counts = self.metadata['zone_counts']
+		zone_counts = self._metadata['zone_counts']
 		index, = np.where(zone_counts)
 		self.logger.debug("Preallocating group IDs: %s", index)
-		self.h5file.preallocate_groups(index, zone_counts[index], dtypes=dtypes)
-		self.metadata['allocation_done'] = True
+		self._h5file.preallocate_groups(index, zone_counts[index], dtypes=dtypes)
+		self._metadata['allocation_done'] = True
 
 	def update(self, data):
 		""" Add data to the file.
@@ -307,16 +307,16 @@ class CatalogueStore(object):
 			raise Exception("skycoord column is required")
 
 		zone_index = self._index(*data['skycoord'].transpose())
-		self.h5file.update(zone_index, data)
+		self._h5file.update(zone_index, data)
 
-		self._datastore = self.h5file.data
+		self._datastore = self._h5file.data
 
 		try:
-			self.attributes['count']
+			self._attributes['count']
 		except KeyError:
-			self.attributes['count'] = 0
+			self._attributes['count'] = 0
 		key, arr = data.items()[0]
-		self.attributes['count'] += len(arr)
+		self._attributes['count'] += len(arr)
 
 	def update_attributes(self, attrib=None, **args):
 		""" Update file metadata.
@@ -327,7 +327,7 @@ class CatalogueStore(object):
 		if self.readonly:
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
-		self.h5file.update_attributes(attrib, **args)
+		self._h5file.update_attributes(attrib, **args)
 
 	def update_units(self, attrib):
 		""" Update units in file metadata.
@@ -338,7 +338,7 @@ class CatalogueStore(object):
 		if self.readonly:
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
-		self.h5file.update_units(attrib)
+		self._h5file.update_units(attrib)
 
 	def update_description(self, attrib):
 		""" Update description in file metadata.
@@ -349,11 +349,11 @@ class CatalogueStore(object):
 		if self.readonly:
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
-		self.h5file.update_description(attrib)
+		self._h5file.update_description(attrib)
 
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
-		if self.attributes['partition_scheme'] == self.HEALPIX:
+		if self._attributes['partition_scheme'] == self.HEALPIX:
 			return self._hp_projector.ang2pix(lon, lat)
 		return self.ZONE_ZERO
 
@@ -387,7 +387,7 @@ class CatalogueStore(object):
 		key : str
 			Name of attribute to return.
 		"""
-		return self.attributes[key]
+		return self._attributes[key]
 
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).
@@ -525,7 +525,7 @@ class CatalogueStore(object):
 
 		# construct a catalogue object
 		metadata = {}
-		for key, value in self.attributes.items():
+		for key, value in self._attributes.items():
 			metadata[key] = value
 		cat = catalogue.Catalogue(data=structured_arr,
 								metadata=metadata,
