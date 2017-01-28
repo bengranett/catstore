@@ -196,6 +196,10 @@ class CatalogueStore(object):
 
 	def __iter__(self):
 		""" """
+		self.cat_metadata = {}
+		for key, value in self._attributes.items():
+			self.cat_metadata[key] = value
+
 		self._iter_zone_index = 0
 		self._iter_zone_list = self._datastore.keys()
 		return self
@@ -208,7 +212,9 @@ class CatalogueStore(object):
 		try:
 			zone = self._iter_zone_list[self._iter_zone_index]
 			self._iter_zone_index += 1
-			return self._datastore[zone]
+
+			return catalogue.Catalogue(data=self._datastore[zone],
+								metadata=self.cat_metadata)
 		except IndexError:
 			raise StopIteration()
 
@@ -376,6 +382,7 @@ class CatalogueStore(object):
 
 	def get_data(self):
 		""" A generating function that returns the hdf5 groups."""
+		self.logger.warning("get_data is deprecated.  Use iterator instead.")
 		metadata = {}
 		for key, value in self._attributes.items():
 			metadata[key] = value
