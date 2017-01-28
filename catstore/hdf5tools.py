@@ -310,13 +310,22 @@ class HDF5Catalogue(object):
 									userblock_size=self.params['header_bytes'])
 
 		self.attributes = self.storage.attrs
-		try:
-			self.data = self.storage[self.params['special_group_names']['data']]
-		except KeyError:
-			self.data = None
+
+		self.data = self.storage.require_group(self.params['special_group_names']['data'])
+		self.metadata = self.data.attrs
+
+		# Store metadata about file allocation
+		if 'preallocate_file' not in self.metadata:
+			self.metadata['preallocate_file'] = self.params['preallocate_file']
 
 		# Flag to indicate completion of file allocation
-		self.allocation_done = False
+		if 'allocation_done' not in self.metadata:
+			self.metadata['allocation_done'] = False
+
+		# Flag to indicate that all data that was preallocated has been loaded
+		if 'done' not in self.metadata:
+			self.metadata['done'] = False
+
 
 	def _check_inputs(self):
 		""" Sanity check arguments. """
@@ -348,6 +357,10 @@ class HDF5Catalogue(object):
 	def __getattr__(self, key):
 		""" """
 		return self.storage.attrs[key]
+
+	def __getitem__(self, key):
+		""" """
+		return self.storage[key]
 
 	def get_data(self):
 		""" """
@@ -411,7 +424,7 @@ class HDF5Catalogue(object):
 				pass
 			self.update_data(zero_data, group, nmax[i], preallocate=True)
 
-		self.allocation_done = True
+		self.metadata['allocation_done'] = True
 
 	def update(self, group_arr, data):
 		""" Update multiple groups.
@@ -445,9 +458,26 @@ class HDF5Catalogue(object):
 			# Now update the group - this is uncertain if the groups don't exist
 			self.update_data(zone_data, zone)
 
+		self.check_data()
+
 	def _get_group_path(self, group_name):
 		""" Return the full path to the group """
 		return '%s/%s'%(self.params['special_group_names']['data'], group_name)
+
+	def check_data(self):
+		""" Check if loaded data count matches preallocation.
+		Set attribute flag if done.
+		"""
+		if not self.metadata['preallocate_file']:
+			self.metadata['done'] = True
+			return True
+
+		done = True
+		for group in self.data:
+			done &= self.data[group].attrs['done']
+		self.metadata['done'] = done
+		self.logger.debug("Data done flag: %s", self.metadata['done'])
+		return done
 
 	def update_data(self, group_data, group_name=0, nmax=None, preallocate=False, ensure_group_does_not_exist=False):
 		""" Add catalogue data belonging to a single group.
@@ -463,7 +493,7 @@ class HDF5Catalogue(object):
 			raise HDF5CatError("File loaded in read-only mode.")
 
 		if not preallocate:
-			if self.params['preallocate_file'] and not self.allocation_done:
+			if self.metadata['preallocate_file'] and not self.metadata['allocation_done']:
 				raise HDF5CatError('File was not allocated before call to update_data.')
 
 		# Expand the full path to the group
@@ -473,8 +503,11 @@ class HDF5Catalogue(object):
 		group = self.storage.require_group(group_name)
 
 		# count attribute will track the length of the data columns
-		if not 'count' in group.attrs:
+		if 'count' not in group.attrs:
 			group.attrs['count'] = 0
+
+		if 'done' not in group.attrs:
+			group.attrs['done'] = False
 
 		if nmax is not None and 'nmax' in group.attrs:
 			if group.attrs['nmax'] != nmax:
@@ -558,12 +591,12 @@ class HDF5Catalogue(object):
 		# update the count attribute with the length of the data arrays
 		group.attrs['count'] += len(arr)
 
-		# create data alias
-		if self.data is None:
-			self.data = self.storage[self.params['special_group_names']['data']]
+		# if the expected data has been loaded, flag as done
+		if self.metadata['preallocate_file']:
+			if group.attrs['count'] == group.attrs['nmax']:
+				group.attrs['done'] = True
 
 		self.update_metagroup(self.params['special_group_names']['columns'], column_info)
-
 
 	def update_metagroup(self, group_name, attributes, **attrs):
 		""" Create a group to store metadata.

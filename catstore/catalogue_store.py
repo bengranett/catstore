@@ -1,6 +1,6 @@
 import os
 import numpy as np
-
+import copy
 import catalogue
 import pypelid.utils.healpix_projection as HP
 import pypelid.utils.hdf5tools as hdf5tools
@@ -77,22 +77,36 @@ class CatalogueStore(object):
 							}
 	_required_columns = ('skycoord',)
 
-	def __init__(self, filename, mode='r', zone_resolution=1, zone_order=HP.RING,
-					check_hash=True, require_hash=True, official_stamp='pypelid',
-					preallocate_file=True, overwrite=False, **metadata):
+	_default_params = {'zone_resolution': 1,
+						'partition_scheme': HEALPIX,
+						'zone_order': HP.RING,
+						'check_hash': True,
+						'require_hash': True,
+						'official_stamp': 'pypelid',
+						'preallocate_file': True,
+						'overwrite': False,
+						}
+
+	def __init__(self, filename, mode='r', preallocate_file=True, overwrite=False, **input_params):
 		""" """
-		HP.validate_resolution(zone_resolution)
-		HP.validate_order(zone_order)
+		self.params = copy.deepcopy(self._default_params)
+
+		self.params['preallocate_file'] = preallocate_file
+		self.params['overwrite'] = overwrite
+
+		for key, value in input_params.items():
+			try:
+				self.params[key] = value
+			except KeyError:
+				self.logger.warning("Unrecognized argument passed to CatalogueStore (%s)" % key)
+
+		self._check_inputs()
 
 		self.h5file = None
 		self._datastore = None
 		self.attributes = {}
 
 		self.filename = filename
-		self.preallocate_file = preallocate_file
-
-		self.zone_counts = None
-		self.zone_index = {}
 
 		self.readonly = False
 
@@ -101,36 +115,42 @@ class CatalogueStore(object):
 
 		if os.path.exists(filename):
 			if mode == 'w':
-				if not self.overwrite:
+				if not self.params['overwrite']:
 					raise CatStoreError("File %s exists.  Will not overwrite."%filename)
 			else:  # mode is r or a
 				if mode == 'r':
 					self.readonly = True
-				self._load_pypelid_file(check_hash=check_hash, require_hash=require_hash,
-										official_stamp=official_stamp)
+				self._load_pypelid_file()
 				self._open_pypelid(filename, mode=mode)
 				return
 
-		self.readonly = False
-		self._open_pypelid(filename, mode=mode)
-		self.zone_resolution = zone_resolution
-		self.zone_order = zone_order
-		metadata['partition_scheme'] = self.HEALPIX
-		metadata['zone_resolution'] = zone_resolution
-		metadata['zone_order'] = zone_order
-		self.update_attributes(metadata)
-		self._hp_projector = HP.HealpixProjector(resolution=self.zone_resolution,
-												order=self.zone_order)
+		self._hp_projector = HP.HealpixProjector(resolution=self.params['zone_resolution'],
+												order=self.params['zone_order'])
 
-	def _load_pypelid_file(self, check_hash=True, require_hash=True,
-							official_stamp='pypelid'):
+		self._open_pypelid(filename, mode=mode)
+		self.update_attributes(partition_scheme=self.params['partition_scheme'],
+							zone_resolution=self.params['zone_resolution'],
+							zone_order=self.params['zone_order'])
+
+	def _check_inputs(self):
+		""" Check inputs are valid """
+		assert self.params['partition_scheme'] in (self.HEALPIX, self.FULLSKY)
+		assert self.params['check_hash'] in (True, False)
+		assert self.params['require_hash'] in (True, False)
+		assert self.params['preallocate_file'] in (True, False)
+		assert self.params['overwrite'] in (True, False)
+		assert isinstance(self.params['official_stamp'], basestring)
+		HP.validate_resolution(self.params['zone_resolution'])
+		HP.validate_order(self.params['zone_order'])
+
+	def _load_pypelid_file(self):
 		""" Check the input pypelid file and initialize.
 		"""
-		hdf5tools.validate_hdf5_file(self.filename, check_hash=check_hash,
-									require_hash=require_hash,
-									official_stamp=official_stamp)
+		hdf5tools.validate_hdf5_file(self.filename, check_hash=self.params['check_hash'],
+									require_hash=self.params['require_hash'],
+									official_stamp=self.params['official_stamp'])
 
-		with hdf5tools.HDF5Catalogue(self.filename, mode='r') as h5file:
+		with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite']) as h5file:
 
 			# ensure that required attributes are there with acceptable values.
 			for key, options in self._required_attributes.items():
@@ -141,19 +161,17 @@ class CatalogueStore(object):
 				except AssertionError:
 					raise Exception("Cannot load %s: invalid attribute: %s:%s (expected %s)"%(self.filename,key,h5file.attributes[key],options))
 
-			self.zone_resolution = h5file.attributes['zone_resolution']
-			self.zone_order = h5file.attributes['zone_order']
-
 			# ensure that required datasets are there
 			for column_name in self._required_columns:
 				try:
 					if column_name not in h5file.get_columns():
 						raise Exception("Cannot load %s: data column is missing: %s" % (self.filename, column_name))
 				except KeyError:
-						raise Exception("Cannot load %s: column description group is missing" % (self.filename))
+					# The file may not be loaded yet, so ignore this error.
+					pass
 
-		self._hp_projector = HP.HealpixProjector(resolution=self.zone_resolution,
-												order=self.zone_order)
+			self._hp_projector = HP.HealpixProjector(resolution=h5file.attributes['zone_resolution'],
+													order=h5file.attributes['zone_order'])
 		self._datastore = None
 
 	def __str__(self):
@@ -171,7 +189,10 @@ class CatalogueStore(object):
 
 	def __getattr__(self, key):
 		""" """
-		return self.attributes[key]
+		try:
+			return self.attributes[key]
+		except KeyError:
+			return self.metadata[key]
 
 	def __iter__(self):
 		""" """
@@ -193,15 +214,31 @@ class CatalogueStore(object):
 
 	def _open_pypelid(self, filename, mode='r'):
 		""" Load a pypelid catalogue store file. """
-		self.h5file = hdf5tools.HDF5Catalogue(filename, mode=mode, preallocate_file=self.preallocate_file)
+		self.h5file = hdf5tools.HDF5Catalogue(filename,
+											mode=mode,
+											preallocate_file=self.params['preallocate_file'],
+											overwrite=self.params['overwrite'])
 		# access the data group
 		self._datastore = self.h5file.data
+		self.metadata = self.h5file.metadata
 
 		try:
 			self.attributes = self.h5file.attributes
 		except:
 			self.attributes = {}
 			raise
+
+		if 'zone_counts' not in self.metadata:
+			self.metadata['zone_counts'] = np.zeros(self._hp_projector.npix, dtype=int)
+
+		if 'allocation_done' not in self.metadata:
+			self.metadata['allocation_done'] = False
+
+		if 'preallocate_file' not in self.metadata:
+			self.metadata['preallocate_file'] = self.params['preallocate_file']
+
+		if 'done' not in self.metadata:
+			self.metadata['done'] = False
 
 		return self.h5file
 
@@ -227,12 +264,13 @@ class CatalogueStore(object):
 		-------
 		None
 		"""
-		if self.zone_counts is None:
-			self.zone_counts = np.zeros(self._hp_projector.npix, dtype=int)
+		zone_counts = self.metadata['zone_counts']
 
 		zid = self._index(lon, lat)
 		counts = np.bincount(zid)
-		self.zone_counts[:len(counts)] += counts
+		zone_counts[:len(counts)] += counts
+
+		self.metadata['zone_counts'] = zone_counts
 
 	# For backward compatability rename preprocess to preload
 	preload = preprocess
@@ -247,9 +285,12 @@ class CatalogueStore(object):
 		if self.readonly:
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
-		index, = np.where(self.zone_counts)
+
+		zone_counts = self.metadata['zone_counts']
+		index, = np.where(zone_counts)
 		self.logger.debug("Preallocating group IDs: %s", index)
-		self.h5file.preallocate_groups(index, self.zone_counts[index], dtypes=dtypes)
+		self.h5file.preallocate_groups(index, zone_counts[index], dtypes=dtypes)
+		self.metadata['allocation_done'] = True
 
 	def update(self, data):
 		""" Add data to the file.
