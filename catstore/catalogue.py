@@ -63,7 +63,6 @@ class Catalogue(object):
 				self.logger.warning("Need imagecoord or skycoord to make spatial queries.")
 		self.logger.debug("Using %s for spatial index", self._spatial_key)
 
-
 	def __getattr__(self, key):
 		""" Return columns by name 
 
