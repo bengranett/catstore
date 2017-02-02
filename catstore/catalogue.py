@@ -51,7 +51,6 @@ class Catalogue(object):
 			self.load(data)
 
 		self.__dict__['_spatial_key'] = None
-		print self._spatial_key
 		try:
 			self._data['imagecoord']
 			self._spatial_key = 'imagecoord'
