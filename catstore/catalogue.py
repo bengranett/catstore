@@ -89,6 +89,9 @@ class Catalogue(object):
 		except ValueError as e:
 			raise AttributeError(e.message)
 
+	def __getitem__(self, key):
+		return self.__getattr__(key)
+
 	def __setattr__(self, key, value):
 		""" Set a catalogue attribute.  
 
