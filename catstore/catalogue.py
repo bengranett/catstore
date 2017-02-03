@@ -46,6 +46,9 @@ class Catalogue(object):
 
 		self.__dict__['_meta'] = meta
 
+		# Save column names for practicality
+		self.columns = None
+
 		# Load the data
 		self.__dict__['_data'] = {}
 		if data is not None:
@@ -55,7 +58,7 @@ class Catalogue(object):
 		try:
 			self._data['imagecoord']
 			self._spatial_key = 'imagecoord'
-		except KeyError:
+		except (KeyError, ValueError):
 			try:
 				self._data['skycoord']
 				self._spatial_key = 'skycoord'
@@ -147,28 +150,53 @@ class Catalogue(object):
 		self.__dict__['_data'] = data
 
 	def load(self, data):
-		""" Import the data array """
+		""" Import the data array into the Catalogue class.
+
+			Parameters
+			----------
+			data : dict or numpy.recarray
+				the input data table
+		"""
+
+		# Test if conversion to structured array is needed
+
+		convert = False
 
 		if isinstance(data, CatalogueStore):
 			self._convert_CatStore(data)
 			return
 
 		try:
+			# Check if the input data is a structured array
 			if not data.dtype.fields:
-				raise TypeError('The Catalogue class must be loaded with a structured array!')
+				raise TypeError('The Catalogue class must be loaded with a dictionary-like structure or numpy structured array!')
+			else:
+				# Save column names for practicality
+				self.columns = list(data.dtype.names)
 		except AttributeError:
+
+			# Check if the input data is a dict
 			try:
 				data.items()
 			except AttributeError:
 				raise TypeError('The Catalogue class must be loaded with a dictionary-like structure or numpy structured array!')
+			else:
+				convert = True
+				# Save column names for practicality
+				self.columns = list(data.keys())
 
+		# Make sure the needed columns are loaded
 		for column in self._required_columns:
 			try:
 				data[column]
 			except KeyError:
 				raise Exception('Data array is missing a required column: %s'%column)
 
-		self.__dict__['_data'] = data
+		# Finally assign the dictionary to the class instance attribute
+		if convert:
+			self.__dict__['_data'] = misc.dict_to_structured_array(data)
+		else:
+			self.__dict__['_data'] = data
 
 	def dump(self, filename):
 		""" Dump the data array to a Hickle file. """
@@ -299,7 +327,27 @@ class CatalogueError(Exception):
 	pass
 	
 if __name__ == '__main__':
+
+	# Test loading with a structured array
+	data = np.array(np.random.randn(10,3), dtype=[('x', float), ('y', int), ('z', float)])
 	cat = Catalogue()
 	cat._cat_meta = 'hello'
-	print cat._immutable_attributes
+	cat.load(data)
+	print "recarray columns: " + str(cat.columns)
+	print cat.__dict__['_data'].dtype
 
+	# Test loading with a dict
+	data = {'x': np.random.randn(10), 'y': np.random.randn(10), 'z': np.random.randn(10)}
+	cat = Catalogue()
+	cat._cat_meta = 'hello'
+	cat.load(data)
+	print "dict columns: " + str(cat.columns)
+	print cat.__dict__['_data'].dtype
+
+	# Test loading with an HDF5 Group of datasets
+	#cat = Catalogue()
+	#cat._cat_meta = 'hello'
+	#data = None
+	#cat.load(data)
+	#print "recarray columns: " + str(cat.columns)
+	#print cat.__dict__['_data'].dtype
