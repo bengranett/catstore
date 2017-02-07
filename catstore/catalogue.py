@@ -7,7 +7,6 @@ import h5py
 import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
-from pypelid.sky.catalogue_store import CatalogueStore
 
 class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
@@ -162,9 +161,11 @@ class Catalogue(object):
 
 		convert = False
 
-		if isinstance(data, CatalogueStore):
+		try:
 			self._convert_CatStore(data)
 			return
+		except:
+			pass
 
 		try:
 			# Check if the input data is a structured array
