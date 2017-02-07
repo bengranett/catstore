@@ -7,6 +7,7 @@ import h5py
 import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
+from pypelid.sky.catalogue_store import CatalogueStore
 
 class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
@@ -127,8 +128,29 @@ class Catalogue(object):
 		if self._data.dtype.fields is None: return False
 		return self._data.dtype.fields.has_key(key)
 
+	def _convert_CatStore(self, store):
+		""" """
+		columns = [name for name in store._h5file.get_columns()]
+
+		data = {}
+		for cat in store:
+			for name in columns:
+				if not data.has_key(name):
+					data[name] = []
+				data[name].append(getattr(cat, name))
+
+		for name in columns:
+			data[name] = np.concatenate(data[name])
+
+		self.__dict__['_data'] = data
+
 	def load(self, data):
 		""" Import the data array """
+
+		if isinstance(data, CatalogueStore):
+			self._convert_CatStore(data)
+			return
+
 		try:
 			if not data.dtype.fields:
 				raise TypeError('The Catalogue class must be loaded with a structured array!')
