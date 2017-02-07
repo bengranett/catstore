@@ -498,10 +498,13 @@ class HDF5Catalogue(object):
 				raise HDF5CatError('File was not allocated before call to update_data.')
 
 		# Expand the full path to the group
-		group_name = self._get_group_path(group_name)
+		group_path = self._get_group_path(group_name)
 
 		# Create the group
-		group = self.storage.require_group(group_name)
+		group = self.storage.require_group(group_path)
+
+		# store the group name
+		group.attrs['name'] = group_name
 
 		# count attribute will track the length of the data columns
 		if 'count' not in group.attrs:
