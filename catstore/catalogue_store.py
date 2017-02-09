@@ -58,10 +58,10 @@ class CatalogueStore(object):
 		>>> with CatalogueStore(filename, 'w', name='test') as cat:
 		>>>     cat.preload(ra, dec)
 		>>>     cat.allocate(dtypes)
-		>>>     cat.update(data)
-		>>>     cat.update_attributes(meta)
-		>>>     cat.update_units(units)
-		>>>     cat.update_description(description)
+		>>>     cat.load(data)
+		>>>     cat.load_attributes(meta)
+		>>>     cat.load_units(units)
+		>>>     cat.load_description(description)
 
 	"""
 
@@ -128,7 +128,7 @@ class CatalogueStore(object):
 												order=self.params['zone_order'])
 
 		self._open_pypelid(filename, mode=mode)
-		self.update_attributes(partition_scheme=self.params['partition_scheme'],
+		self.load_attributes(partition_scheme=self.params['partition_scheme'],
 							zone_resolution=self.params['zone_resolution'],
 							zone_order=self.params['zone_order'])
 
@@ -299,7 +299,7 @@ class CatalogueStore(object):
 		self._h5file.preallocate_groups(index, zone_counts[index], dtypes=dtypes)
 		self._metadata['allocation_done'] = True
 
-	def update(self, data):
+	def load(self, data):
 		""" Add data to the file.
 
 		Parameters
@@ -322,10 +322,12 @@ class CatalogueStore(object):
 			self._attributes['count']
 		except KeyError:
 			self._attributes['count'] = 0
+
+		# Save the number of rows in table (i.e. total number of objects in the catalogue)
 		key, arr = data.items()[0]
 		self._attributes['count'] += len(arr)
 
-	def update_attributes(self, attrib=None, **args):
+	def load_attributes(self, attrib=None, **args):
 		""" Update file metadata.
 
 		attrib: dict
@@ -336,7 +338,7 @@ class CatalogueStore(object):
 			return
 		self._h5file.update_attributes(attrib, **args)
 
-	def update_units(self, attrib):
+	def load_units(self, attrib):
 		""" Update units in file metadata.
 
 		attrib : dict
@@ -347,7 +349,7 @@ class CatalogueStore(object):
 			return
 		self._h5file.update_units(attrib)
 
-	def update_description(self, attrib):
+	def load_description(self, attrib):
 		""" Update description in file metadata.
 
 		attrib : dict
