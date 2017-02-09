@@ -362,6 +362,40 @@ class CatalogueStore(object):
 			return
 		self._h5file.update_description(attrib)
 
+	def update(self, data):
+		""" Updates the data that has already been loaded.
+			This should not be overwriting the input catalogue columns.
+			This is only for saving results!
+			
+			TODO: raise Exception if input columns update is attempted.
+
+			Parameters
+			----------
+			data : numpy.array
+				This structured array contains the values to save and the which 
+				row to find the object in: 'index' and 'skycoords'.
+
+			Returns
+			-------
+			None
+		"""
+
+		logging.debug('Updating CatalogueStore object with data of type: ' + str(data.dtype))
+
+		if self.readonly:
+			self.logger.warning("File is readonly! %s", self.filename)
+			return
+
+		if 'skycoord' not in data.dtype.names or 'index' not in data.dtype.names:
+			raise Exception("skycoord and index columns are required")
+		
+		# Get the zone index
+		zone_index = self._index(*data['skycoord'].transpose())
+
+		# Which columns to update
+		columns = [col for col in data.dtype.names if col not in ['index', 'skycoord']]
+		self._h5file.update(zone_index, data[columns], index=data['index'])
+
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
 		if self._attributes['partition_scheme'] == self.HEALPIX:
