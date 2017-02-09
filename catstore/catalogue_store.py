@@ -213,8 +213,10 @@ class CatalogueStore(object):
 			zone = self._iter_zone_list[self._iter_zone_index]
 			self._iter_zone_index += 1
 
-			return catalogue.Catalogue(data=self._datastore[zone],
-								metadata=self.cat_metadata)
+			# Include zone index into the metadata so it can be looked up later
+			metadata = dict(self.cat_metadata.items()+[('zone', int(zone))])
+			return catalogue.Catalogue(data=self._datastore[zone], metadata=metadata)
+
 		except IndexError:
 			raise StopIteration()
 
