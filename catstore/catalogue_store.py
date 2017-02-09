@@ -408,6 +408,11 @@ class CatalogueStore(object):
 		"""
 		return self._attributes[key]
 
+	def get_dtype(self):
+		""" Return the column/dataset descriptions as a structured-array-like dtype object.
+		"""
+		return self._h5file.dtypes
+
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).
 
