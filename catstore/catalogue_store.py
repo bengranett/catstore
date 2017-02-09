@@ -393,8 +393,8 @@ class CatalogueStore(object):
 		zone_index = self._index(*data['skycoord'].transpose())
 
 		# Which columns to update
-		columns = [col for col in data.dtype.names if col not in ['index', 'skycoord']]
-		self._h5file.update(zone_index, data[columns], index=data['index'])
+		columns = [col for col in data.dtype.names if col not in ['skycoord']]
+		self._h5file.update(zone_index, data[columns], index=data['index'], ind_col='index')
 
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
