@@ -61,10 +61,10 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 		for key,arr in data.items():
 			subcat[key] = arr[i:i+batch]
 		with catalogue_store.CatalogueStore(filename, 'a') as cat:
-			cat.update(subcat)
-			cat.update_attributes(meta)
-			cat.update_units(units)
-			cat.update_description(description)
+			cat.load(subcat)
+			cat.load_attributes(meta)
+			cat.load_units(units)
+			cat.load_description(description)
 		i += batch
 
 	with catalogue_store.CatalogueStore(filename) as cat:

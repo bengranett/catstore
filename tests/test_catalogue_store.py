@@ -37,11 +37,11 @@ def check_catalogue_store(n=100, zone_resolution=0):
 
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=False) as cat:
-		cat.update(data)
-		cat.update_attributes(test='ciao')
-		cat.update_attributes(meta)
-		cat.update_units(units)
-		cat.update_description(description)
+		cat.load(data)
+		cat.load_attributes(test='ciao')
+		cat.load_attributes(meta)
+		cat.load_units(units)
+		cat.load_description(description)
 		assert(cat._datastore is not None)
 
 	# Compute check sums
@@ -106,10 +106,10 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 			i += batch
 
 		cat.allocate(dtypes)
-		cat.update(data)
-		cat.update_attributes(meta)
-		cat.update_units(units)
-		cat.update_description(description)
+		cat.load(data)
+		cat.load_attributes(meta)
+		cat.load_units(units)
+		cat.load_description(description)
 
 	# Compute check sums
 	count = 0
