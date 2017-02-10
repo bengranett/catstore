@@ -58,10 +58,10 @@ class CatalogueStore(object):
 		>>> with CatalogueStore(filename, 'w', name='test') as cat:
 		>>>     cat.preload(ra, dec)
 		>>>     cat.allocate(dtypes)
-		>>>     cat.update(data)
-		>>>     cat.update_attributes(meta)
-		>>>     cat.update_units(units)
-		>>>     cat.update_description(description)
+		>>>     cat.load(data)
+		>>>     cat.load_attributes(meta)
+		>>>     cat.load_units(units)
+		>>>     cat.load_description(description)
 
 	"""
 
@@ -128,7 +128,7 @@ class CatalogueStore(object):
 												order=self.params['zone_order'])
 
 		self._open_pypelid(filename, mode=mode)
-		self.update_attributes(partition_scheme=self.params['partition_scheme'],
+		self.load_attributes(partition_scheme=self.params['partition_scheme'],
 							zone_resolution=self.params['zone_resolution'],
 							zone_order=self.params['zone_order'])
 
@@ -189,6 +189,11 @@ class CatalogueStore(object):
 
 	def __getattr__(self, key):
 		""" """
+		if key == 'columns':
+			try:
+				return tuple([name for name in self._h5file.get_columns()])
+			except KeyError:
+				return ()
 		try:
 			return self._attributes[key]
 		except KeyError:
@@ -213,8 +218,10 @@ class CatalogueStore(object):
 			zone = self._iter_zone_list[self._iter_zone_index]
 			self._iter_zone_index += 1
 
-			return catalogue.Catalogue(data=self._datastore[zone],
-								metadata=self.cat_metadata)
+			# Include zone index into the metadata so it can be looked up later
+			metadata = dict(self.cat_metadata.items()+[('zone', int(zone))])
+			return catalogue.Catalogue(data=self._datastore[zone], metadata=metadata)
+
 		except IndexError:
 			raise StopIteration()
 
@@ -299,7 +306,7 @@ class CatalogueStore(object):
 		self._h5file.preallocate_groups(index, zone_counts[index], dtypes=dtypes)
 		self._metadata['allocation_done'] = True
 
-	def update(self, data):
+	def load(self, data):
 		""" Add data to the file.
 
 		Parameters
@@ -322,10 +329,12 @@ class CatalogueStore(object):
 			self._attributes['count']
 		except KeyError:
 			self._attributes['count'] = 0
+
+		# Save the number of rows in table (i.e. total number of objects in the catalogue)
 		key, arr = data.items()[0]
 		self._attributes['count'] += len(arr)
 
-	def update_attributes(self, attrib=None, **args):
+	def load_attributes(self, attrib=None, **args):
 		""" Update file metadata.
 
 		attrib: dict
@@ -336,7 +345,7 @@ class CatalogueStore(object):
 			return
 		self._h5file.update_attributes(attrib, **args)
 
-	def update_units(self, attrib):
+	def load_units(self, attrib):
 		""" Update units in file metadata.
 
 		attrib : dict
@@ -347,7 +356,7 @@ class CatalogueStore(object):
 			return
 		self._h5file.update_units(attrib)
 
-	def update_description(self, attrib):
+	def load_description(self, attrib):
 		""" Update description in file metadata.
 
 		attrib : dict
@@ -357,6 +366,40 @@ class CatalogueStore(object):
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
 		self._h5file.update_description(attrib)
+
+	def update(self, data):
+		""" Updates the data that has already been loaded.
+			This should not be overwriting the input catalogue columns.
+			This is only for saving results!
+			
+			TODO: raise Exception if input columns update is attempted.
+
+			Parameters
+			----------
+			data : numpy.array
+				This structured array contains the values to save and the which 
+				row to find the object in: 'index' and 'skycoords'.
+
+			Returns
+			-------
+			None
+		"""
+
+		logging.debug('Updating CatalogueStore object with data of type: ' + str(data.dtype))
+
+		if self.readonly:
+			self.logger.warning("File is readonly! %s", self.filename)
+			return
+
+		if 'skycoord' not in data.dtype.names or 'index' not in data.dtype.names:
+			raise Exception("skycoord and index columns are required")
+		
+		# Get the zone index
+		zone_index = self._index(*data['skycoord'].transpose())
+
+		# Which columns to update
+		columns = [col for col in data.dtype.names if col not in ['skycoord']]
+		self._h5file.update(zone_index, data[columns], index=data['index'], ind_col='index')
 
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
@@ -403,6 +446,11 @@ class CatalogueStore(object):
 			Name of attribute to return.
 		"""
 		return self._attributes[key]
+
+	def get_dtype(self):
+		""" Return the column/dataset descriptions as a structured-array-like dtype object.
+		"""
+		return self._h5file.dtypes
 
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).

@@ -37,11 +37,11 @@ def check_catalogue_store(n=100, zone_resolution=0):
 
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=False) as cat:
-		cat.update(data)
-		cat.update_attributes(test='ciao')
-		cat.update_attributes(meta)
-		cat.update_units(units)
-		cat.update_description(description)
+		cat.load(data)
+		cat.load_attributes(test='ciao')
+		cat.load_attributes(meta)
+		cat.load_units(units)
+		cat.load_description(description)
 		assert(cat._datastore is not None)
 
 	# Compute check sums
@@ -99,6 +99,8 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=True) as cat:
 
+		print cat.columns
+
 		# load in the catalogue in batches
 		i = 0
 		while i < len(ra):
@@ -106,16 +108,21 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 			i += batch
 
 		cat.allocate(dtypes)
-		cat.update(data)
-		cat.update_attributes(meta)
-		cat.update_units(units)
-		cat.update_description(description)
+		cat.load(data)
+		cat.load_attributes(meta)
+		cat.load_units(units)
+		cat.load_description(description)
 
 	# Compute check sums
 	count = 0
 	check_lon = 0
 	check_lat = 0
 	with catalogue_store.CatalogueStore(filename) as cat:
+		columns = cat.columns
+		assert(len(columns)==2)
+		assert 'skycoord' in columns
+		assert 'redshift' in columns
+
 		print "zones:", len(cat)
 		for group in cat:
 			lon, lat = np.transpose(group.skycoord)
