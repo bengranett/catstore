@@ -385,6 +385,8 @@ class CatalogueStore(object):
 			None
 		"""
 
+		if isinstance(data,dict):
+			data = misc.dict_to_structured_array(data)
 		logging.debug('Updating CatalogueStore object with data of type: ' + str(data.dtype))
 
 		if self.readonly:
@@ -399,6 +401,8 @@ class CatalogueStore(object):
 
 		# Which columns to update
 		columns = [col for col in data.dtype.names if col not in ['skycoord']]
+
+		# This updates all the rows in the column, since that is what we need here to save results
 		self._h5file.update(zone_index, data[columns], index=data['index'], ind_col='index')
 
 	def _index(self, lon, lat):

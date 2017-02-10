@@ -11,30 +11,37 @@ logging.basicConfig(level=logging.INFO)
 def check_catalogue_store(n=100, zone_resolution=0):
 	""" Quick demo of catalogue store.
 
-	Generate mock data and write a catalogue store file.  Open the file and check
-	that contents are correct.
+		Generate mock data and write a catalogue store file.  
+		Update the catalogue store with some new values.
+		Open the file and check	that contents are correct.
 	"""
 	# temporary file to use for test
 	filename = os.tempnam() + ".pypelid"
 
 	# generate distribution of points on the sky
+	index = np.arange(n)
 	ra, dec = sphere.sample_sphere(n)
 	skycoord = np.transpose([ra, dec])
 	redshift = np.random.uniform(1., 2., n)
 
 	# define metadata
 	data = {
+			'index': index,
 			'skycoord': skycoord,
 			'redshift': redshift,
 			}
 	dtypes = [
+			np.dtype([('index', int, 1)]),
 			np.dtype([('skycoord', float, 2)]),
 			np.dtype([('redshift', float, 1)])
 			]
-	units = {'skycoord': 'degree', 'redshift': 'redshift'}
+	units = {'index': 'none', 'skycoord': 'degree', 'redshift': 'redshift'}
 	meta = {'coordsys': 'equatorial J2000'}
-	description = {'skycoord': 'RA and Dec coordinates', 'redshift': 'Cosmological redshift'}
+	description = {'index': 'Pypelid catalogue index', 
+				   'skycoord': 'RA and Dec coordinates', 
+				   'redshift': 'Cosmological redshift'}
 
+	# Load first
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=False) as cat:
 		cat.load(data)
@@ -44,10 +51,18 @@ def check_catalogue_store(n=100, zone_resolution=0):
 		cat.load_description(description)
 		assert(cat._datastore is not None)
 
+		# Update second by setting 50% of the redshift values to 0
+		p_update = 0.5
+		index_update = np.random.choice([False,True], n, p=[1-p_update,p_update], replace=True)
+		data['redshift'][index_update] = 0.0
+		cat.update(data)
+
 	# Compute check sums
 	count = 0
 	check_lon = 0
 	check_lat = 0
+	check_old_z = []
+	check_new_z = []
 	with catalogue_store.CatalogueStore(filename) as cat:
 		print "count:", cat.count
 		assert(cat.test == 'ciao')
@@ -57,12 +72,20 @@ def check_catalogue_store(n=100, zone_resolution=0):
 			count += len(lon)
 			check_lon += np.sum(lon)
 			check_lat += np.sum(lat)
+			check_old_z.extend(group.redshift[group.redshift>0])
+			check_new_z.extend(group.redshift[group.redshift==0])
 	assert(count == n)
-	assert(np.allclose(check_lon, np.sum(skycoord[:, 0])))
-	assert(np.allclose(check_lat, np.sum(skycoord[:, 1])))
+	assert(len(check_new_z)+len(check_old_z) == n)
+	assert(np.allclose( check_lon, np.sum(skycoord[:, 0]) ))
+	assert(np.allclose( check_lat, np.sum(skycoord[:, 1]) ))
+	assert(np.allclose( np.sort(check_old_z), np.sort(redshift[np.logical_not(index_update)]) ))
 
 	# delete the test file
 	os.unlink(filename)
+
+if __name__=='__main__':
+	check_catalogue_store(n=10, zone_resolution=0)
+
 
 
 def check_catalogue_store_batches(n=100, zone_resolution=0):
