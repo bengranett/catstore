@@ -189,6 +189,11 @@ class CatalogueStore(object):
 
 	def __getattr__(self, key):
 		""" """
+		if key == 'columns':
+			try:
+				return tuple([name for name in self._h5file.get_columns()])
+			except KeyError:
+				return ()
 		try:
 			return self._attributes[key]
 		except KeyError:

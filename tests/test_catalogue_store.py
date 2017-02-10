@@ -99,6 +99,8 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=True) as cat:
 
+		print cat.columns
+
 		# load in the catalogue in batches
 		i = 0
 		while i < len(ra):
@@ -116,6 +118,11 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 	check_lon = 0
 	check_lat = 0
 	with catalogue_store.CatalogueStore(filename) as cat:
+		columns = cat.columns
+		assert(len(columns)==2)
+		assert 'skycoord' in columns
+		assert 'redshift' in columns
+
 		print "zones:", len(cat)
 		for group in cat:
 			lon, lat = np.transpose(group.skycoord)
