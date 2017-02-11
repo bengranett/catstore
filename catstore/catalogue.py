@@ -41,8 +41,8 @@ class Catalogue(object):
 			if key not in meta:
 				raise Exception('Meta key %s not found. It is needed in Catalogue metadata!'%key)
 
-		if len(meta) > len(self._required_meta):
-			logging.warning('Some of the metadata you are passing to Catalogue is not used.')
+		#if len(meta) > len(self._required_meta):
+		#	logging.warning('Some of the metadata you are passing to Catalogue is not used.')
 
 		self.__dict__['_meta'] = meta
 
@@ -263,9 +263,9 @@ class Catalogue(object):
 			center x
 		y : array
 			center y
-		width : float
+		width : float or numpy.array
 			width
-		height : float
+		height : float or numpy.array
 			height
 		pad_x : float
 			add this padding to width
@@ -276,7 +276,7 @@ class Catalogue(object):
 
 		Returns
 		-------
-		? : list
+		results : list of lists
 			list of indices of objects in selection
 
 		"""
@@ -293,20 +293,37 @@ class Catalogue(object):
 
 		matches = self.query_disk(cx,cy,r)
 
-		data_x, data_y = np.transpose(self.__dict__['_data'][_spatial_key])
+		data_x, data_y = np.transpose(self.__dict__['_data'][self._spatial_key])
 
+		# Allow width and height to be arrays
+		try:
+			nh = len(height)
+		except TypeError:
+			h = height
+			nh = 1
+		try:
+			nw = len(width)
+		except TypeError:
+			w = width
+			nw = 1
+
+		# Loop through coords and find matches ??
 		results = []
 		for i, match in enumerate(matches):
+			if nh>1: h = height[match]
+			if nw>1: w = width[match]
+
 			dx = data_x[match] - cx[i]
 			dy = data_y[match] - cy[i]
 			dxt = dx * costheta - dy * sintheta
 			dyt = dx * sintheta + dy * costheta
 
-			sel_x = np.abs(dxt) < (width/2. + pad_x)
-			sel_y = np.abs(dyt) < (height/2. + pad_y)
+			sel_x = np.abs(dxt) < (w/2. + pad_x)
+			sel_y = np.abs(dyt) < (h/2. + pad_y)
 			sel = np.where(sel_x & sel_y)
 
 			results.append(np.take(match, sel[0]))
+
 		if len(results)==1:
 			return results[0]
 		return results
