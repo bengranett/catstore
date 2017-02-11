@@ -68,7 +68,6 @@ class Catalogue(object):
 				elif 'skycoord' in attrs.keys():
 					self._spatial_key = 'skycoord'
 				else:
-					print attrs.keys()
 					self.logger.error("Need imagecoord or skycoord to make spatial queries.")
 				if data is None:
 					self.load({self._spatial_key: attrs[self._spatial_key]})
