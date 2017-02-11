@@ -34,7 +34,8 @@ class Catalogue(object):
 			for key, value in metadata.items():
 				meta[key] = value
 		for key, value in attrs.items():
-			meta[key] = value
+			if key not in ['imagecoord','skycoord']:
+				meta[key] = value
 
 		for key in self._required_meta:
 			if key not in meta:
@@ -62,7 +63,17 @@ class Catalogue(object):
 				self._data['skycoord']
 				self._spatial_key = 'skycoord'
 			except KeyError:
-				self.logger.warning("Need imagecoord or skycoord to make spatial queries.")
+				if 'imagecoord' in attrs.keys():
+					self._spatial_key = 'imagecoord'
+				elif 'skycoord' in attrs.keys():
+					self._spatial_key = 'skycoord'
+				else:
+					print attrs.keys()
+					self.logger.error("Need imagecoord or skycoord to make spatial queries.")
+				if data is None:
+					self.load({self._spatial_key: attrs[self._spatial_key]})
+				else:
+					raise
 		self.logger.debug("Using %s for spatial index", self._spatial_key)
 
 	def __getattr__(self, key):
@@ -234,13 +245,13 @@ class Catalogue(object):
 
 		"""
 		try:
-			self.lookup_tree
+			self._lookup_tree
 		except AttributeError:
 			self.build_tree()
 
-		if self.lookup_tree is None: self.build_tree()
+		if self._lookup_tree is None: self.build_tree()
 
-		matches = self.lookup_tree.query_radius(np.transpose([x,y]), radius)
+		matches = self._lookup_tree.query_radius(np.transpose([x,y]), radius)
 		return matches
 
 	def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
@@ -310,7 +321,7 @@ class Catalogue(object):
 			Maximum number of objects to show in the plot.
 
 		"""
-		xy = self.__dict__['_data'][_spatial_key]
+		xy = self.__dict__['_data'][self._spatial_key]
 
 		# Subsample a big catalogue
 		if len(self) > nplot:
