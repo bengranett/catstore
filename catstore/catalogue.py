@@ -135,7 +135,11 @@ class Catalogue(object):
 
 	def __len__(self):
 		""" Return length of catalogue """
-		return len(self._data)
+		try:
+			return self._len
+		except AttributeError:
+			self._len = len(self._data)	
+		return self._len
 
 	def __contains__(self, key):
 		""" Check if we have the given field key """
