@@ -34,14 +34,15 @@ class Catalogue(object):
 			for key, value in metadata.items():
 				meta[key] = value
 		for key, value in attrs.items():
-			meta[key] = value
+			if key not in ['imagecoord','skycoord']:
+				meta[key] = value
 
 		for key in self._required_meta:
 			if key not in meta:
 				raise Exception('Meta key %s not found. It is needed in Catalogue metadata!'%key)
 
-		if len(meta) > len(self._required_meta):
-			logging.warning('Some of the metadata you are passing to Catalogue is not used.')
+		#if len(meta) > len(self._required_meta):
+		#	logging.warning('Some of the metadata you are passing to Catalogue is not used.')
 
 		self.__dict__['_meta'] = meta
 
@@ -62,7 +63,16 @@ class Catalogue(object):
 				self._data['skycoord']
 				self._spatial_key = 'skycoord'
 			except KeyError:
-				self.logger.warning("Need imagecoord or skycoord to make spatial queries.")
+				if 'imagecoord' in attrs.keys():
+					self._spatial_key = 'imagecoord'
+				elif 'skycoord' in attrs.keys():
+					self._spatial_key = 'skycoord'
+				else:
+					self.logger.error("Need imagecoord or skycoord to make spatial queries.")
+				if data is None:
+					self.load({self._spatial_key: attrs[self._spatial_key]})
+				else:
+					raise
 		self.logger.debug("Using %s for spatial index", self._spatial_key)
 
 	def __getattr__(self, key):
@@ -234,13 +244,13 @@ class Catalogue(object):
 
 		"""
 		try:
-			self.lookup_tree
+			self._lookup_tree
 		except AttributeError:
 			self.build_tree()
 
-		if self.lookup_tree is None: self.build_tree()
+		if self._lookup_tree is None: self.build_tree()
 
-		matches = self.lookup_tree.query_radius(np.transpose([x,y]), radius)
+		matches = self._lookup_tree.query_radius(np.transpose([x,y]), radius)
 		return matches
 
 	def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
@@ -252,9 +262,9 @@ class Catalogue(object):
 			center x
 		y : array
 			center y
-		width : float
+		width : float or numpy.array
 			width
-		height : float
+		height : float or numpy.array
 			height
 		pad_x : float
 			add this padding to width
@@ -265,7 +275,7 @@ class Catalogue(object):
 
 		Returns
 		-------
-		? : list
+		results : list of lists
 			list of indices of objects in selection
 
 		"""
@@ -282,20 +292,37 @@ class Catalogue(object):
 
 		matches = self.query_disk(cx,cy,r)
 
-		data_x, data_y = np.transpose(self.__dict__['_data'][_spatial_key])
+		data_x, data_y = np.transpose(self.__dict__['_data'][self._spatial_key])
 
+		# Allow width and height to be arrays
+		try:
+			nh = len(height)
+		except TypeError:
+			h = height
+			nh = 1
+		try:
+			nw = len(width)
+		except TypeError:
+			w = width
+			nw = 1
+
+		# Loop through coords and find matches ??
 		results = []
 		for i, match in enumerate(matches):
+			if nh>1: h = height[match]
+			if nw>1: w = width[match]
+
 			dx = data_x[match] - cx[i]
 			dy = data_y[match] - cy[i]
 			dxt = dx * costheta - dy * sintheta
 			dyt = dx * sintheta + dy * costheta
 
-			sel_x = np.abs(dxt) < (width/2. + pad_x)
-			sel_y = np.abs(dyt) < (height/2. + pad_y)
+			sel_x = np.abs(dxt) < (w/2. + pad_x)
+			sel_y = np.abs(dyt) < (h/2. + pad_y)
 			sel = np.where(sel_x & sel_y)
 
 			results.append(np.take(match, sel[0]))
+
 		if len(results)==1:
 			return results[0]
 		return results
@@ -310,7 +337,7 @@ class Catalogue(object):
 			Maximum number of objects to show in the plot.
 
 		"""
-		xy = self.__dict__['_data'][_spatial_key]
+		xy = self.__dict__['_data'][self._spatial_key]
 
 		# Subsample a big catalogue
 		if len(self) > nplot:

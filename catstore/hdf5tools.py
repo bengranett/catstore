@@ -58,7 +58,7 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None,
 	else:
 		raise HDF5CatError("Unrecognized hash algorithm (%s)" % algorithm)
 
-	logging.debug("Hash algorithm: %s %i", algorithm, hasher.digest_size)
+	#logging.debug("Hash algorithm: %s %i", algorithm, hasher.digest_size)
 
 	if hasher.digest_size > digest_size:
 		logging.warning("Digest length for algorithm %s is %i hex characters.  Digest will be truncated to %i",
@@ -66,24 +66,24 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None,
 
 	t0 = time.time()
 
-	logging.debug("reserved %i",reserved)
+	#logging.debug("reserved %i",reserved)
 
 	with open(filename, 'rb') as f:
 		if store_hash_in_file:
 			f.seek(hash_length + reserved)
 
 		count = 0
-		logging.debug("reading file")
+		#logging.debug("reading file")
 		while True:
 			chunk = f.read(chunk_size)
 			if chunk == '':
 				break
 			hasher.update(chunk)
 			count += 1
-		logging.debug("done reading file")
+		#logging.debug("done reading file")
 
 	size = count * chunk_size / 1024.**2
-	logging.debug("Hashed %3.1f MB in %f sec", size, time.time() - t0)
+	#logging.debug("Hashed %3.1f MB in %f sec", size, time.time() - t0)
 
 	digest = hasher.hexdigest()[:hash_length]
 	return digest
@@ -113,7 +113,7 @@ def read_hdf5_hash(filename, skip=7, hash_info_len=2, hash_algo_len=1):
 		hash_length = int(f.read(hash_info_len), base=16)
 		hash_algo = f.read(hash_algo_len)
 		digest = f.read(hash_length)
-	logging.debug("hash length %i, hash_algo %s, digest %i", hash_length, hash_algo, len(digest))
+	#logging.debug("hash length %i, hash_algo %s, digest %i", hash_length, hash_algo, len(digest))
 
 	# remove null characters in case the digest is shorter than the reserved space.
 	digest = string.translate(digest, None, chr(0))
