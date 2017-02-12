@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import os
+import tempfile
 import pypelid.utils.hdf5tools as hdf5tools
 import logging
 
@@ -9,7 +10,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 def test():
     """ """
-    filename = os.tempnam()
+    filename = tempfile.NamedTemporaryFile(delete=False).name+".pypelid"
+
     storage = hdf5tools.HDF5Catalogue(filename, 'w',
                 preallocate_file=False)
     storage.update_attributes(attribute1='hi')

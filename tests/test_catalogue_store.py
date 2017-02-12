@@ -1,5 +1,6 @@
 import sys
 import os
+import tempfile
 import numpy as np
 import pypelid.sky.catalogue_store as catalogue_store
 import pypelid.utils.sphere as sphere
@@ -16,7 +17,7 @@ def check_catalogue_store(n=100, zone_resolution=0):
 		Open the file and check	that contents are correct.
 	"""
 	# temporary file to use for test
-	filename = os.tempnam() + ".pypelid"
+	filename = tempfile.NamedTemporaryFile(delete=False).name+".pypelid"
 
 	# generate distribution of points on the sky
 	index = np.arange(n)
@@ -97,7 +98,7 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 	that contents are correct.
 	"""
 	# temporary file to use for test
-	filename = os.tempnam() + ".pypelid"
+	filename = tempfile.NamedTemporaryFile(delete=False).name+".pypelid"
 
 	# generate distribution of points on the sky
 	ra, dec = sphere.sample_sphere(n)
@@ -163,7 +164,8 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 def test_catalogue_store_1():
 	""" Check that attempting to open a file that does not exist results in IOError
 	"""
-	filename = os.tempnam() + ".pypelid"
+	filename = tempfile.NamedTemporaryFile(delete=False).name+".pypelid"
+
 	try:
 		catalogue_store.CatalogueStore(filename, mode='r')
 	except IOError:

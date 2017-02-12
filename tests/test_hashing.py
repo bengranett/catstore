@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import os
+import tempfile
 import pypelid.utils.hdf5tools as hdf5tools
 import logging
 
@@ -8,7 +9,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def check_hashing(algo='blake2', hash_length=32, hash_info_len=2):
-    filename = os.tempnam()
+    filename = tempfile.NamedTemporaryFile(delete=False).name+".pypelid"
+
     storage = hdf5tools.HDF5Catalogue(filename, 'w',
                 preallocate_file=False,
                 hash_algorithm=algo,
