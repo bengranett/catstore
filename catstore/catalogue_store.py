@@ -317,7 +317,9 @@ class CatalogueStore(object):
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
 
-		if 'skycoord' not in data:
+		try:
+			data['skycoord']
+		except KeyError, ValueError:
 			raise Exception("skycoord column is required")
 
 		zone_index = self._index(*data['skycoord'].transpose())
@@ -330,9 +332,14 @@ class CatalogueStore(object):
 		except KeyError:
 			self._attributes['count'] = 0
 
+
 		# Save the number of rows in table (i.e. total number of objects in the catalogue)
-		key, arr = data.items()[0]
-		self._attributes['count'] += len(arr)
+		if isinstance(data, dict):
+			key, arr = data.items()[0]
+			count = len(arr)
+		else:
+			count = len(data)
+		self._attributes['count'] += count
 
 	def load_attributes(self, attrib=None, **args):
 		""" Update file metadata.
