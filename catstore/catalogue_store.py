@@ -181,7 +181,7 @@ class CatalogueStore(object):
 		return self
 
 	def __exit__(self, type, value, traceback):
-		self._close_pypelid()
+		self.close()
 
 	def __getitem__(self, key):
 		""" Get a zone by name. """
@@ -256,7 +256,7 @@ class CatalogueStore(object):
 
 		return self._h5file
 
-	def _close_pypelid(self):
+	def close(self):
 		""" """
 		if self._h5file is not None:
 			self._h5file.close()

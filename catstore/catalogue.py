@@ -148,19 +148,9 @@ class Catalogue(object):
 
 	def _convert_CatStore(self, store):
 		""" """
-		columns = [name for name in store._h5file.get_columns()]
-
-		data = {}
-		for cat in store:
-			for name in columns:
-				if not data.has_key(name):
-					data[name] = []
-				data[name].append(getattr(cat, name))
-
-		for name in columns:
-			data[name] = np.concatenate(data[name])
-
-		self.__dict__['_data'] = data
+		arr = store.to_structured_array()
+		self.columns = list(arr.dtype.names)
+		self.__dict__['_data'] = arr
 
 	def load(self, data):
 		""" Import the data array into the Catalogue class.
