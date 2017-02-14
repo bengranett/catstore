@@ -477,7 +477,7 @@ class CatalogueStore(object):
 		return np.dtype(dtypes)
 
 	def to_structured_array(self, columns=None, zones=None):
-		""" Conver the data stored in the CatalogueStore to a numpy structured array.
+		""" Convert the data stored in the CatalogueStore to a numpy structured array.
 
 		Parameters
 		----------
@@ -553,6 +553,7 @@ class CatalogueStore(object):
 			xyz = np.transpose(xyz)
 
 		matches = {}
+		count = 0
 		for zone_i in self._which_zones(clon, clat, radius):
 			try:
 				data = self._retrieve_zone(zone_i)
@@ -567,8 +568,9 @@ class CatalogueStore(object):
 			cut = mu > mu_thresh
 			cut = np.sum(cut, axis=0)          # OR operation along the first dimension
 			matches[zone_i] = np.where(cut)
+			count += len(matches[zone_i][0])
 
-		return matches
+		return matches, count
 
 	def _query_box(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0, orientation=0):
 		""" Find objects in a rectangle.
@@ -586,9 +588,10 @@ class CatalogueStore(object):
 		indices of objects in selection
 		"""
 		r = np.sqrt(width**2 + height**2) / 2.
-		match_dict = self._query_cap(clon, clat, r)
+		match_dict, count_cap = self._query_cap(clon, clat, r)
 
 		selection_dict = {}
+		count = 0
 		for zone, matches in match_dict.items():
 			data = self._retrieve_zone(zone)
 			lon, lat = np.transpose(data['skycoord'][:][matches])
@@ -601,11 +604,13 @@ class CatalogueStore(object):
 
 			selection_dict[zone] = np.take(matches, sel[0])
 
-		return selection_dict
+			count += len(sel[0])
+
+		return selection_dict, count
 
 
 	def retrieve(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0,
-					orientation=0, transform=None):
+					orientation=0, transform=None, columns=None):
 		""" Select objects in a rectangle and return a projected catalogue object.
 
 		Parameters
@@ -633,41 +638,58 @@ class CatalogueStore(object):
 		"""
 
 		# Raise error if data has not yet been loaded
-		if self._datastore is None: raise Exception('You cannot retrieve from an empty catalogue!')
+		if self._datastore is None:
+			raise Exception('You cannot retrieve from an empty catalogue!')
 
-		data_dict = {}
+		matches, count = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
 
-		matches = self._query_box(clon, clat, width, height, pad_ra, pad_dec, orientation)
-		logging.debug('Found ' + str(len(matches)) + ' objects at (' + str(clon) + ',' + str(clat) + ').')
+		logging.debug('Found ' + str(count) + ' objects at (' + str(clon) + ',' + str(clat) + ').')
 
 		# Return none if no objects fall into the rectangle
-		if len(matches)==0: return None
+		if len(matches) == 0:
+			return None
 
+		# construct the dtype for requested columns
+		dtype = self.get_dtype()
+		if columns is not None:
+			d = []
+			for name in columns:
+				d.append((name, dtype[name]))
+			dtype = np.dtype(d)
+
+		# add imagecoord column to dtype
+		dtype = misc.concatenate_dtypes([dtype, np.dtype([('imagecoord', float, 2)])])
+
+		# allocate a structured array
+		struc_array = np.zeros(count, dtype=dtype)
+
+		i = 0
 		for zone, selection in matches.items():
 			data = self._retrieve_zone(zone)
-			for name, arr in data.items():
-				if name not in data_dict:
-					data_dict[name] = []
-				data_dict[name].append(arr[:][selection])
 
-		for name in data_dict.keys():
-			data_dict[name] = np.concatenate(data_dict[name])
+			if columns is None:
+				columns = data.keys()
+
+			for column in columns:
+				arr = data[column][:][selection]
+				count = len(arr)
+				j = i + count
+				struc_array[column][i:j] = arr
+			i += count
 
 		if transform is not None:
-			lon, lat = np.transpose(data_dict['skycoord'])
+			lon, lat = np.transpose(struc_array['skycoord'])
 			ximage, yimage = transform(lon, lat)
-			data_dict['imagecoord'] = np.transpose([ximage, yimage])
+			struc_array['imagecoord'] = np.transpose([ximage, yimage])
 		else:
-			data_dict['imagecoord'] = data_dict['skycoord']
+			struc_array['imagecoord'] = struc_array['skycoord']
 
-		# construct a structured array
-		structured_arr = misc.dict_to_structured_array(data_dict)
 
 		# construct a catalogue object
 		metadata = {}
 		for key, value in self._attributes.items():
 			metadata[key] = value
-		cat = catalogue.Catalogue(data=structured_arr,
+		cat = catalogue.Catalogue(data=struc_array,
 								metadata=metadata,
 								center=(clon, clat))
 
