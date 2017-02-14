@@ -476,6 +476,52 @@ class CatalogueStore(object):
 
 		return np.dtype(dtypes)
 
+	def to_structured_array(self, columns=None, zones=None):
+		""" Conver the data stored in the CatalogueStore to a numpy structured array.
+
+		Parameters
+		----------
+		columns : list
+			list of column names to access.  If None, all will be returned
+		zones : list
+			list of zone names in CatalogueStore to access.  If None, all will be returned.
+			The list of zone names can be read with get_zones()
+
+		Outputs
+		---------
+		numpy structured array
+		"""
+		dtype = self.get_dtype()
+		if columns is not None:
+			d = []
+			for name in columns:
+				d.append((name, dtype[name]))
+			dtype = np.dtype(d)
+
+		struc_array = np.zeros(self.count, dtype=dtype)
+
+		if zones is None:
+			zones = self.get_zones()
+
+		i = 0
+		for zone in zones:
+			group = self._retrieve_zone(zone)
+			count = group.attrs['count']
+			j = i + count
+
+			if columns is None:
+				columns = group.keys()
+
+			for name in columns:
+				column = group[name]
+				struc_array[name.encode('ascii')][i:j] = column
+
+			i = j
+
+		assert j == len(struc_array)
+
+		return struc_array
+
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).
 
