@@ -498,10 +498,17 @@ class CatalogueStore(object):
 				d.append((name, dtype[name]))
 			dtype = np.dtype(d)
 
-		struc_array = np.zeros(self.count, dtype=dtype)
-
 		if zones is None:
+			# retrieve all zones
 			zones = self.get_zones()
+			count = self.count
+		else:
+			# Need to count number of objects in the specified zones
+			count = 0
+			for zone in zones:
+				count += self._retrieve_zone(zone).attrs['count']
+
+		struc_array = np.zeros(count, dtype=dtype)
 
 		i = 0
 		for zone in zones:
