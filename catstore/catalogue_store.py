@@ -185,15 +185,15 @@ class CatalogueStore(object):
 
 	def __getitem__(self, key):
 		""" Get a zone by name. """
-		return self._datastore(key)
+		return self._datastore[key]
 
 	def __getattr__(self, key):
 		""" """
 		if key == 'columns':
-			try:
-				return tuple([name for name in self._h5file.get_columns()])
-			except KeyError:
-				return ()
+			return self.get_columns()
+		elif key == 'dtype':
+			return self.get_dtype()
+
 		try:
 			return self._attributes[key]
 		except KeyError:
@@ -451,10 +451,30 @@ class CatalogueStore(object):
 		"""
 		return self._attributes[key]
 
+	def get_columns(self):
+		""" Return a tuple of column names
+		"""
+		try:
+			return tuple([name for name in self._h5file.get_columns()])
+		except KeyError:
+			return ()
+
 	def get_dtype(self):
 		""" Return the column/dataset descriptions as a structured-array-like dtype object.
 		"""
-		return self._h5file.dtypes
+		dtypes = []
+		for zone in self._datastore.keys():
+			# get a data group (doesn't matter which)
+			for name, dataset in self._datastore[zone].items():
+				# dim is the number of elements of each entry
+				dim = dataset.shape[1:]
+				# hdf5 group names are returned in unicode
+				dtypes.append((name.encode('ascii'), dataset.dtype, dim))
+			if len(dtypes) > 0:
+				# if we got something, break out
+				break
+
+		return np.dtype(dtypes)
 
 	def _query_cap(self, clon, clat, radius=1.):
 		""" Find neighbors to a given point (clon, clat).
