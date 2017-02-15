@@ -502,7 +502,7 @@ class CatalogueStore(object):
 		if columns is not None:
 			d = []
 			for name in columns:
-				d.append((name, dtype[name]))
+				d.append((name.encode('ascii'), dtype[name]))
 			dtype = np.dtype(d)
 
 		if zones is None:
