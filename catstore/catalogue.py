@@ -59,20 +59,24 @@ class Catalogue(object):
 			self._data['imagecoord']
 			self._spatial_key = 'imagecoord'
 		except (KeyError, ValueError):
+			# First try to find coordinates in the data structure.
+			# If the coordinates are not in the input data structure, 
+			# check if they have been input as a separate array.
 			try:
 				self._data['skycoord']
 				self._spatial_key = 'skycoord'
 			except KeyError:
+				# Look at the attrs, if they contain any kind of coordinates.
 				if 'imagecoord' in attrs.keys():
 					self._spatial_key = 'imagecoord'
 				elif 'skycoord' in attrs.keys():
 					self._spatial_key = 'skycoord'
 				else:
+					# This only logs the error - it does not raise an Exception.
 					self.logger.error("Need imagecoord or skycoord to make spatial queries.")
-				if data is None:
+				# In case no data array has been input, only the coordinates as a column
+				if data is None and len(attrs)>0:
 					self.load({self._spatial_key: attrs[self._spatial_key]})
-				else:
-					raise
 		self.logger.debug("Using %s for spatial index", self._spatial_key)
 
 	def __getattr__(self, key):
