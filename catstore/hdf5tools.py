@@ -402,6 +402,12 @@ class HDF5Catalogue(object):
 		dtypes : list
 			List of tuples that are recognized by np.dtype
 		"""
+		if isinstance(dtypes, np.dtype):
+			dtype_list = []
+			for name in dtypes.names:
+				dtype_list.append(np.dtype([(name, dtypes[name])]))
+			dtypes = dtype_list
+
 		zero_data = {}
 		for t in dtypes:
 			try:
