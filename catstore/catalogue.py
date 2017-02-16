@@ -216,6 +216,10 @@ class Catalogue(object):
 		""" Return the data array."""
 		return self.__dict__['_data']
 
+	def get_meta(self, key):
+		""" """
+		return self.__dict__['_meta'][key]
+
 	def build_tree(self):
 		""" Initialize the data structure for fast spatial lookups.
 
@@ -354,13 +358,15 @@ class CatalogueError(Exception):
 	
 if __name__ == '__main__':
 
+	#logging.basicConfig(level=logging.DEBUG)
+
 	# Test loading with a structured array
 	data = np.array(np.random.randn(10,3), dtype=[('x', float), ('y', int), ('z', float)])
-	cat = Catalogue()
-	cat._cat_meta = 'hello'
+	cat = Catalogue(metadata={'hello':0})
 	cat.load(data)
 	print "recarray columns: " + str(cat.columns)
 	print cat.__dict__['_data'].dtype
+	print 'meta hello', cat.get_meta('hello')
 
 	# Test loading with a dict
 	data = {'x': np.random.randn(10), 'y': np.random.randn(10), 'z': np.random.randn(10)}

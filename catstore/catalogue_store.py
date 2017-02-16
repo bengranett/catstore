@@ -400,8 +400,8 @@ class CatalogueStore(object):
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
 
-		if 'skycoord' not in data.dtype.names or 'index' not in data.dtype.names:
-			raise Exception("skycoord and index columns are required")
+		if ('skycoord' not in data.dtype.names and 'zone' not in data.dtypes.names) or 'index' not in data.dtype.names:
+			raise Exception("skycoord or zone and index columns are required")
 		
 		# Get the zone index
 		zone_index = self._index(*data['skycoord'].transpose())
