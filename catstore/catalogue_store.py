@@ -204,7 +204,6 @@ class CatalogueStore(object):
 		self.cat_metadata = {}
 		for key, value in self._attributes.items():
 			self.cat_metadata[key] = value
-
 		self._iter_zone_index = 0
 		self._iter_zone_list = self._datastore.keys()
 		return self
@@ -664,12 +663,15 @@ class CatalogueStore(object):
 				d.append((name, dtype[name]))
 			dtype = np.dtype(d)
 
-		# add imagecoord column to dtype
-		dtype = misc.concatenate_dtypes([dtype, np.dtype([('imagecoord', float, 2)])])
+		# add imagecoord and zone columns to dtype
+		dtype = misc.concatenate_dtypes([dtype, 
+										 np.dtype([('imagecoord', float, 2)]),
+										 np.dtype([('zone', int, 1)])])
 
 		# allocate a structured array
 		struc_array = np.zeros(count, dtype=dtype)
 
+		# zone start
 		i = 0
 		for zone, selection in matches.items():
 			data = self._retrieve_zone(zone)
@@ -677,11 +679,17 @@ class CatalogueStore(object):
 			if columns is None:
 				columns = data.keys()
 
+			# zone end
+			j = i+count
 			for column in columns:
 				arr = data[column][:][selection]
-				count = len(arr)
-				j = i + count
+				assert count==len(arr)
 				struc_array[column][i:j] = arr
+
+			# Add a column that contains the zone information
+			struc_array['zone'][i:j] = zone
+
+			# next zone start
 			i += count
 
 		if transform is not None:
