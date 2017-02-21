@@ -399,14 +399,17 @@ class CatalogueStore(object):
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
 
-		if ('skycoord' not in data.dtype.names and 'zone' not in data.dtypes.names) or 'index' not in data.dtype.names:
+		if ('skycoord' not in data.dtype.names and 'zone' not in data.dtype.names) or 'index' not in data.dtype.names:
 			raise Exception("skycoord or zone and index columns are required")
 		
 		# Get the zone index
-		zone_index = self._index(*data['skycoord'].transpose())
+		if 'zone' not in data.dtype.names:
+			zone_index = self._index(*data['skycoord'].transpose())
+		else:
+			zone_index = data['zone']
 
 		# Which columns to update
-		columns = [col for col in data.dtype.names if col not in ['skycoord']]
+		columns = [col for col in data.dtype.names if col not in ['skycoord', 'zone']]
 
 		# This updates all the rows in the column, since that is what we need here to save results
 		self._h5file.update(zone_index, data[columns], index=data['index'], ind_col='index')
