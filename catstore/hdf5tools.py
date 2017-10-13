@@ -9,6 +9,7 @@ import textwrap
 import copy
 import time
 import string
+import metafil
 
 hash_algorithms = {
 				'M': 'md5',
@@ -408,35 +409,179 @@ class HDF5Catalogue(object):
 				dtype_list.append(np.dtype([(name, dtypes[name])]))
 			dtypes = dtype_list
 
-		zero_data = {}
-		for t in dtypes:
-			try:
-				dtype = np.dtype(t)
-			except TypeError:
-				dtype = np.dtype([t])
-
-			name = dtype.names[0]
-			zero_data[name] = np.zeros(0, dtype=dtype[0])
-			self.logger.debug("HDF5 added dataset %s with type %s.",name, dtype[0])
-
 		if not misc.check_is_iterable(group_names):
 			group_names = [group_names]
 		if not misc.check_is_iterable(nmax):
 			nmax = [nmax]
 
-		for i, group in enumerate(group_names):
+		for i, group_name in enumerate(group_names):
+			group_name = str(group_name)
 			try:
-				self.get_data_group(group)
+				self.get_data_group(group_name)
 				raise HDF5CatError("Attempted to pre-allocate a group that already exists.")
 			except KeyError:
 				pass
-			self.update_data(zero_data, group, nmax[i], preallocate=True)
+
+			# Expand the full path to the group
+			group_path = self._get_group_path(group_name)
+
+			# Create the group
+			group = self.storage.require_group(group_path)
+
+			for t in dtypes:
+				try:
+					dtype = np.dtype(t)
+				except TypeError:
+					dtype = np.dtype([t])
+
+				name = dtype.names[0]
+
+				# create an empty dataset
+				self.create_dataset(group, name, dtype=dtype[0], nmax=nmax[i])
+
+			group.attrs['count'] = 0
+			group.attrs['nmax'] = nmax[i]
 
 		self.metadata['allocation_done'] = True
 		self.dtypes = dtypes
 
-	def update(self, group_arr, data, index=None, ind_col=None):
-		""" Update multiple groups.
+	def create_dataset(self, group, name, dtype=None, arr=None, nmax=None):
+		""" Create a new dataset within a data group.
+
+		If arr is None, the dataset will be preallocated with nmax elements.
+
+		Parameters
+		----------
+		group : str
+			group name
+		name : str
+			dataset name
+		dtype : numpy dtype
+			dtype for the dataset (not used if arr is given)
+		arr : numpy array
+			data array
+		nmax : int
+			max number of elements for preallocation
+
+		Raises
+		------
+		"""
+		if nmax is None and 'nmax' in group.attrs:
+			nmax = group.attrs['nmax']
+
+		if nmax is not None and 'nmax' in group.attrs:
+			if group.attrs['nmax'] != nmax:
+				raise HDF5CatError("Cannot update group %s because supplied nmax is not consistent with group attributes."%group)
+
+		if arr is None:
+			arr = np.zeros(nmax, dtype=dtype)
+
+		if self.params['chunk_size'] is None:
+			chunkshape = None
+		else:
+			chunkshape = list(arr.shape)
+			chunkshape[0] = self.params['chunk_size']
+			chunkshape = tuple(chunkshape)
+		maxshape = list(arr.shape)
+		maxshape[0] = nmax
+		maxshape = tuple(maxshape)
+
+		if nmax < chunkshape[0]:
+			# self.logger.debug("Dataset is too small for chunking (chunkshape %s, nmax %s)", chunkshape, nmax)
+			chunkshape = None
+
+		group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
+
+		# determine the number of elements per data row if 2 dimensional
+		if len(arr.shape) <= 1:
+			dim = len(arr.shape)
+		else:
+			dim = np.prod(arr.shape[1:])
+
+		try:
+			dtype_string = str(arr.dtype[0])
+		except KeyError:
+			dtype_string = str(arr.dtype)
+		self.update_metagroup(self.params['special_group_names']['columns'], {name: "%i %s" % (dim, dtype_string)})
+
+	def append_dataset(self, group, name, arr):
+		""" Append a data array to a dataset. 
+
+		Parameters
+		----------
+		group : str
+			group name
+		name : str
+			dataset name
+		arr : numpy array
+			data array
+		"""
+		dim = group.attrs['count']
+
+		if name not in group:
+			return self.create_dataset(group, name, arr=arr)
+
+		if not self.params['preallocate_file']:
+			# if the group already exists, but the rows are not specified append the array to the dataset.
+			group[name].resize(dim + arr.shape[0], axis=0)
+		if dim + len(arr) > group[name].shape[0]:
+			raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
+		group[name][dim:dim + len(arr)] = arr
+		self.logger.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
+
+	def append_group(self, group_name, data, index=None):
+		""" Append data to a group. 
+
+		Parameters
+		----------
+		group : group object
+			group
+		data : numpy struc array or dictionary like object
+			data array
+		"""
+		# Expand the full path to the group
+		group_path = self._get_group_path(str(group_name))
+
+		# Create the group
+		group = self.storage.require_group(group_path)
+
+		if 'count' not in group.attrs:
+			group.attrs['count'] = 0
+
+		if 'done' not in group.attrs:
+			group.attrs['done'] = False
+
+		try:
+			columns = data.keys()
+		except AttributeError:
+			columns = data.dtype.names
+
+		count = None
+
+		for name in columns:
+			if index is not None:
+				sub = data[name][index]
+			else:
+				sub = data[name]
+
+			if count is None:
+				count = len(sub)
+			else:
+				assert count == len(sub)
+
+			self.append_dataset(group, name, sub)
+
+		group.attrs['count'] += count
+
+		# if the expected data has been loaded, flag as done
+		if self.metadata['preallocate_file']:
+			if group.attrs['count'] == group.attrs['nmax']:
+				group.attrs['done'] = True
+
+		return count
+
+	def append(self, group_arr, data):
+		""" Append data across multiple groups.
 
 		Parameters
 		----------
@@ -445,19 +590,91 @@ class HDF5Catalogue(object):
 			giving a rule how to distribute the objects into the HDF5 groups
 		data : dict or numpy structured array
 			the data columns given as dictionary entries with columns names as keys
-		index : numpy.array
-			an array of unique indices of the rows that needed updating
-		ind_col : string
-			column that contains this unique index in data
-
-		Returns
-		------
-		None
 		"""
+		# Check that we are allowed to write
+		if self.readonly:
+			raise HDF5CatError("File loaded in read-only mode.")
 
-		# Check how the indices are passed
-		if (index is None) != (ind_col is None):
-			raise Exception("I don't know which column to index on.")
+		# Loop over all the unique zone identifiers in the group list
+		# optimisation comment: This is N=1 scan of the data column
+		count = 0
+		for zone in np.unique(group_arr):
+
+			# Identify all the corresponding row indices
+			# optimisation comment: This adds len(np.unique(group_list)) scans to N
+			zone_index, = np.where(group_arr == zone)
+			zone_size = len(zone_index)
+
+			if zone_size == 0:
+				continue
+
+			count += self.append_group(zone, data, index=zone_index)
+
+		self.check_data()
+
+	def update_dataset(self, group, name, data, index, operation):
+		""" Update indexed elements of a dataset.
+
+		Parameters
+		----------
+		group : str
+			group name
+		name : str
+			dataset name
+		arr : numpy array
+			data array
+		index : numpy bool array
+			indexes
+		"""
+		sel = np.zeros(len(group[name]), dtype=bool)
+		sel[index] = True
+		if operation == 'replace':
+			group[name][sel] = data
+		elif operation == 'sum':
+			group[name][sel] = group[name][sel] + data
+		else:
+			raise Exception("unknown operation %s"%operation)
+
+		self.logger.debug("update %s dataset at specified indices: %s %s chunky:%s", operation, name,group[name].shape,group[name].chunks)
+
+	def update_group(self, group_name, data, index, operation):
+		""" update data in a group.
+
+		Parameters
+		----------
+		group : group object
+			group
+		data : numpy struc array or dictionary like object
+			data array
+		"""
+		# Expand the full path to the group
+		group_path = self._get_group_path(str(group_name))
+
+		# Create the group
+		group = self.storage.require_group(group_path)
+
+		try:
+			columns = data.keys()
+		except AttributeError:
+			columns = data.dtype.names
+
+		for name in columns:
+			self.update_dataset(group, name, data[name], index, operation)
+
+	def update(self, group_arr, data, index, operation='replace'):
+		""" Update data across multiple groups.
+
+		Parameters
+		----------
+		group_arr : numpy.ndarray
+			a column corresponding in length to the number of rows in data
+			giving a rule how to distribute the objects into the HDF5 groups
+		data : dict or numpy structured array
+			the data columns given as dictionary entries with columns names as keys
+		"""
+		# Check that we are allowed to write
+		if self.readonly:
+			raise HDF5CatError("File loaded in read-only mode.")
 
 		# Loop over all the unique zone identifiers in the group list
 		# optimisation comment: This is N=1 scan of the data column
@@ -466,27 +683,15 @@ class HDF5Catalogue(object):
 			# Identify all the corresponding row indices
 			# optimisation comment: This adds len(np.unique(group_list)) scans to N
 			zone_index, = np.where(group_arr == zone)
+			zone_size = len(zone_index)
 
-			# Call the update_data function to add to the group
-			zone_data = {}
-			try:
-				columns = data.keys()
-			except AttributeError:
-				columns = data.dtype.names
-			for col in columns:
-				if col == ind_col: continue # Don't overwrite the indexing column!
-				zone_data[col] = data[col][zone_index]
+			if zone_size == 0:
+				continue
 
-			# Recalculate the index according how it is stored in the array
-			if index is not None and ind_col is not None:
-				update_index = misc.valmask(index[zone_index], data[ind_col][zone_index])
-			else:
-				update_index = None
-			
-			# Now update the group - this is uncertain if the groups don't exist
-			self.update_data(zone_data, zone, index=update_index)
+			ind = index[zone_index]
 
-		self.check_data()
+			self.update_group(zone, data[zone_index], ind, operation)
+
 
 	def _get_group_path(self, group_name):
 		""" Return the full path to the group """
@@ -502,149 +707,13 @@ class HDF5Catalogue(object):
 
 		done = True
 		for group in self.data:
-			done &= self.data[group].attrs['done']
+			try:
+				done &= self.data[group].attrs['done']
+			except KeyError:
+				done = False
 		self.metadata['done'] = done
 		self.logger.debug("Data done flag: %s", self.metadata['done'])
 		return done
-
-	def update_data(self, group_data, group_name=0, nmax=None, preallocate=False, ensure_group_does_not_exist=False, index=None):
-		""" Add catalogue data belonging to a single group.
-
-		group_data : dict or numpy structured array
-			data to load
-		group_name : int
-			default 0
-		nmax : int
-			maximum number of objects in the group.  Only used if preallocate_file is enabled.
-		"""
-		if self.readonly:
-			raise HDF5CatError("File loaded in read-only mode.")
-
-		if not preallocate:
-			if self.metadata['preallocate_file'] and not self.metadata['allocation_done']:
-				raise HDF5CatError('File was not allocated before call to update_data.')
-
-		if ensure_group_does_not_exist and index is not None:
-			raise HDF5CatError('Cannot update dataset elements if the group does not exist.')
-
-		# Expand the full path to the group
-		group_path = self._get_group_path(group_name)
-
-		# Create the group
-		group = self.storage.require_group(group_path)
-
-		# store the group name
-		group.attrs['name'] = group_name
-
-		# count attribute will track the length of the data columns
-		if 'count' not in group.attrs:
-			group.attrs['count'] = 0
-
-		if 'done' not in group.attrs:
-			group.attrs['done'] = False
-
-		if nmax is not None and 'nmax' in group.attrs:
-			if group.attrs['nmax'] != nmax:
-				raise HDF5CatError("Cannot update group %s because supplied nmax is not consistent with group attributes."%group_name)
-
-		if nmax is not None and 'nmax' not in group.attrs:
-			group.attrs['nmax'] = nmax
-
-		column_info = {}
-
-		# this variable will be used to ensure that all data arrays have the same length.
-		length_check = None
-
-		# access the data column names (from either dict or numpy structured array)
-		try:
-			column_names = group_data.keys()
-		except AttributeError:
-			column_names = group_data.dtype.names
-
-		for name in column_names:  # loop through column names
-
-			arr = group_data[name]
-
-			# Do a check of the length of the data array.
-			if length_check is not None:
-				if len(arr) != length_check:
-					raise HDF5CatError("The length of column %s does not match! length:%i expected:%i."%(name,len(arr),length_check))
-			length_check = len(arr)
-
-			if name in group:
-				
-				# Get the existing data size
-				dim = group.attrs['count']
-	
-				if index is not None:
-					# Update only some of the dataset elements if an index is given for which to update
-					if len(index) != len(group[name]):
-						raise TypeError("Your index array has an incompatible shape to the existing data.")
-					elif np.sum(index) != len(arr):
-						raise TypeError("Your index array has an incompatible shape to your updated values.")
-					group[name][index] = arr
-					#self.logger.debug("updating dataset at specified indices: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
-				else:
-					if not self.params['preallocate_file']:
-						# if the group already exists, but the rows are not specified append the array to the dataset.
-						group[name].resize(dim + arr.shape[0], axis=0)
-					if dim + len(arr) > group[name].shape[0]:
-						raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
-					group[name][dim:dim + len(arr)] = arr
-					#self.logger.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
-			
-			else:
-				# catch the case when a new dataset is added that was not preallocated, but nmax of the group is already known.
-				if nmax is None and 'nmax' in group.attrs:
-					nmax = group.attrs['nmax']
-
-				if self.params['preallocate_file'] and nmax is None:
-					raise HDF5CatError("Cannot create dataset %s.%s because nmax must be specified to preallocate the hdf5 file."%(group_name,name))
-
-				# otherwise create a new dataset
-				if self.params['chunk_size'] is None:
-					chunkshape = None
-				else:
-					chunkshape = list(arr.shape)
-					chunkshape[0] = self.params['chunk_size']
-					chunkshape = tuple(chunkshape)
-				maxshape = list(arr.shape)
-				maxshape[0] = nmax
-
-				if nmax < chunkshape[0]:
-					self.logger.debug("Dataset is too small for chunking (chunkshape %s, nmax %s)", chunkshape, nmax)
-					chunkshape = None
-
-				if self.params['preallocate_file']:
-					group.create_dataset(name, data=np.zeros(maxshape,dtype=arr.dtype), maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
-					if len(arr) > group[name].shape[0]:
-						raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
-					group[name][:len(arr)] = arr
-				else:
-					group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
-				#self.logger.debug("create dataset: %s %s %s chunky:%s",name,group[name].shape,maxshape,group[name].chunks)
-
-			# determine the number of elements per data row if 2 dimensional
-			if len(arr.shape) <= 1:
-				dim = len(arr.shape)
-			else:
-				dim = np.prod(arr.shape[1:])
-
-			try:
-				dtype_string = str(arr.dtype[0])
-			except KeyError:
-				dtype_string = str(arr.dtype)
-			column_info[name] = "%i %s" % (dim, dtype_string)
-
-		# update the count attribute with the length of the data arrays
-		group.attrs['count'] += len(arr)
-
-		# if the expected data has been loaded, flag as done
-		if self.metadata['preallocate_file']:
-			if group.attrs['count'] == group.attrs['nmax']:
-				group.attrs['done'] = True
-
-		self.update_metagroup(self.params['special_group_names']['columns'], column_info)
 
 	def update_metagroup(self, group_name, attributes, **attrs):
 		""" Create a group to store metadata.
@@ -691,7 +760,7 @@ class HDF5Catalogue(object):
 			self.storage.close()
 			return
 
-		gitenv = misc.GitEnv()
+		gitenv = metafil.GitEnv()
 		self.storage.attrs['commit_hash'] = gitenv.hash
 		self.storage.flush()
 		self.storage.close()
@@ -770,7 +839,7 @@ class HDF5Catalogue(object):
 		header.write(self.horizline())
 
 		# write the git environment
-		gitenv = misc.GitEnv()
+		gitenv = metafil.GitEnv()
 		header.write(gitenv)
 
 		# close the header

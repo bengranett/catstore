@@ -77,7 +77,7 @@ class Catalogue(object):
 				# In case no data array has been input, only the coordinates as a column
 				if data is None and len(attrs)>0:
 					self.load({self._spatial_key: attrs[self._spatial_key]})
-		self.logger.debug("Using %s for spatial index", self._spatial_key)
+		# self.logger.debug("Using %s for spatial index", self._spatial_key)
 
 	def __getattr__(self, key):
 		""" Return columns by name 
@@ -355,31 +355,3 @@ class Catalogue(object):
 
 class CatalogueError(Exception):
 	pass
-	
-if __name__ == '__main__':
-
-	#logging.basicConfig(level=logging.DEBUG)
-
-	# Test loading with a structured array
-	data = np.array(np.random.randn(10,3), dtype=[('x', float), ('y', int), ('z', float)])
-	cat = Catalogue(metadata={'hello':0})
-	cat.load(data)
-	print "recarray columns: " + str(cat.columns)
-	print cat.__dict__['_data'].dtype
-	print 'meta hello', cat.get_meta('hello')
-
-	# Test loading with a dict
-	data = {'x': np.random.randn(10), 'y': np.random.randn(10), 'z': np.random.randn(10)}
-	cat = Catalogue()
-	cat._cat_meta = 'hello'
-	cat.load(data)
-	print "dict columns: " + str(cat.columns)
-	print cat.__dict__['_data'].dtype
-
-	# Test loading with an HDF5 Group of datasets
-	#cat = Catalogue()
-	#cat._cat_meta = 'hello'
-	#data = None
-	#cat.load(data)
-	#print "recarray columns: " + str(cat.columns)
-	#print cat.__dict__['_data'].dtype

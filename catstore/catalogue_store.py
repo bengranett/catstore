@@ -1,7 +1,9 @@
+import sys
 import os
 import numpy as np
 import copy
 import catalogue
+import pypelid
 import pypelid.utils.healpix_projection as HP
 import pypelid.utils.hdf5tools as hdf5tools
 import pypelid.utils.misc as misc
@@ -87,6 +89,8 @@ class CatalogueStore(object):
 						'overwrite': False,
 						}
 
+	_immutable_columns = ('index', 'zone', '_index', '_zone', 'skycoord')
+
 	def __init__(self, filename, mode='r', preallocate_file=True, overwrite=False, **input_params):
 		""" """
 		self.params = copy.deepcopy(self._default_params)
@@ -146,9 +150,9 @@ class CatalogueStore(object):
 	def _load_pypelid_file(self):
 		""" Check the input pypelid file and initialize.
 		"""
-		hdf5tools.validate_hdf5_file(self.filename, check_hash=self.params['check_hash'],
-									require_hash=self.params['require_hash'],
-									official_stamp=self.params['official_stamp'])
+		#hdf5tools.validate_hdf5_file(self.filename, check_hash=self.params['check_hash'],
+		#							require_hash=self.params['require_hash'],
+		#								official_stamp=self.params['official_stamp'])
 
 		with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite']) as h5file:
 
@@ -209,7 +213,10 @@ class CatalogueStore(object):
 		return self
 
 	def __len__(self):
-		return len(self._datastore)
+		try:
+			return len(self.__dict__['_datastore'])
+		except KeyError:
+			return 0
 
 	def next(self):
 		""" """
@@ -304,8 +311,9 @@ class CatalogueStore(object):
 		self.logger.debug("Preallocating group IDs: %s", index)
 		self._h5file.preallocate_groups(index, zone_counts[index], dtypes=dtypes)
 		self._metadata['allocation_done'] = True
+		self._attributes['count'] = 0
 
-	def load(self, data):
+	def append(self, data):
 		""" Add data to the file.
 
 		Parameters
@@ -322,7 +330,7 @@ class CatalogueStore(object):
 			raise Exception("skycoord column is required")
 
 		zone_index = self._index(*data['skycoord'].transpose())
-		self._h5file.update(zone_index, data)
+		self._h5file.append(zone_index, data)
 
 		self._datastore = self._h5file.data
 
@@ -330,7 +338,6 @@ class CatalogueStore(object):
 			self._attributes['count']
 		except KeyError:
 			self._attributes['count'] = 0
-
 
 		# Save the number of rows in table (i.e. total number of objects in the catalogue)
 		if isinstance(data, dict):
@@ -373,17 +380,17 @@ class CatalogueStore(object):
 			return
 		self._h5file.update_description(attrib)
 
-	def update(self, data):
+	def update(self, data, key='_index', operation='replace', columns=None):
 		""" Updates the data that has already been loaded.
 			This should not be overwriting the input catalogue columns.
 			This is only for saving results!
-			
+
 			TODO: raise Exception if input columns update is attempted.
 
 			Parameters
 			----------
 			data : numpy.array
-				This structured array contains the values to save and the which 
+				This structured array contains the values to save and the which
 				row to find the object in: 'index' and 'skycoords'.
 
 			Returns
@@ -393,26 +400,43 @@ class CatalogueStore(object):
 
 		if isinstance(data,dict):
 			data = misc.dict_to_structured_array(data)
-		logging.debug('Updating CatalogueStore object with data of type: ' + str(data.dtype))
 
 		if self.readonly:
 			self.logger.warning("File is readonly! %s", self.filename)
 			return
 
-		if ('skycoord' not in data.dtype.names and 'zone' not in data.dtype.names) or 'index' not in data.dtype.names:
-			raise Exception("skycoord or zone and index columns are required")
-		
+		# if ('skycoord' not in data.dtype.names and 'zone' not in data.dtype.names) or 'index' not in data.dtype.names:
+			# raise Exception("skycoord or zone and index columns are required")
+
 		# Get the zone index
-		if 'zone' not in data.dtype.names:
+		if '_zone' not in data.dtype.names:
 			zone_index = self._index(*data['skycoord'].transpose())
 		else:
-			zone_index = data['zone']
+			zone_index = data['_zone']
 
 		# Which columns to update
-		columns = [col for col in data.dtype.names if col not in ['skycoord', 'zone']]
+		cols = data.dtype.names
+		if columns is None: columns=cols
+		columns = [col for col in cols if (col in columns and col not in self._immutable_columns)]
+
+		if len(columns) == 0:
+			self.logger.warning("update called but no columns can be updated!")
+			return
 
 		# This updates all the rows in the column, since that is what we need here to save results
-		self._h5file.update(zone_index, data[columns], index=data['index'], ind_col='index')
+		# Assuming all rows in zone are passed in the correct order!
+		self._h5file.update(zone_index, data[columns], data[key], operation)
+
+	def zero_column(self, columns):
+		""" """
+		for name in columns:
+			if name in self._immutable_columns:
+				continue
+
+			self.logger.debug("zeroing column %s", name)
+
+			for zone in self._datastore.keys():
+				self._datastore[zone][name][:] = np.zeros(self._datastore[zone][name].shape)
 
 	def _index(self, lon, lat):
 		""" Generate the indices for the catalogue eg healpix zones. """
@@ -504,8 +528,20 @@ class CatalogueStore(object):
 		if columns is not None:
 			d = []
 			for name in columns:
-				d.append((name.encode('ascii'), dtype[name]))
+				try:
+					dtype_name = dtype[name]
+				except KeyError:
+					dtype_name = float
+				d.append((name.encode('ascii'), dtype_name))
 			dtype = np.dtype(d)
+
+		dtype = misc.concatenate_dtypes(
+			[
+				dtype,
+				np.dtype([('_zone', int)]),
+				np.dtype([('_index', int)]),
+			]
+		)
 
 		if zones is None:
 			# retrieve all zones
@@ -529,8 +565,13 @@ class CatalogueStore(object):
 				columns = group.keys()
 
 			for name in columns:
+				if not name in group:
+					continue
 				column = group[name]
 				struc_array[name.encode('ascii')][i:j] = column
+
+			struc_array['_zone'][i:j] = np.ones(count) * int(zone)
+			struc_array['_index'][i:j] = np.arange(count)
 
 			i = j
 
@@ -667,9 +708,14 @@ class CatalogueStore(object):
 			dtype = np.dtype(d)
 
 		# add imagecoord and zone columns to dtype
-		dtype = misc.concatenate_dtypes([dtype, 
-										 np.dtype([('imagecoord', float, 2)]),
-										 np.dtype([('zone', int, 1)])])
+		dtype = misc.concatenate_dtypes(
+			[
+				dtype,
+				np.dtype([('imagecoord', float, 2)]),
+				np.dtype([('_zone', int, 1)]),
+				np.dtype([('_index', int, 1)]),
+			]
+		)
 
 		# allocate a structured array
 		struc_array = np.zeros(count, dtype=dtype)
@@ -683,17 +729,17 @@ class CatalogueStore(object):
 				columns = data.keys()
 
 			# zone end
-			j = i+count
+			j = i+len(selection)
 			for column in columns:
 				arr = data[column][:][selection]
-				assert count==len(arr)
 				struc_array[column][i:j] = arr
 
-			# Add a column that contains the zone information
-			struc_array['zone'][i:j] = zone
+			# Add a column that contains the zone information and original indices within the zone
+			struc_array['_zone'][i:j] = zone
+			struc_array['_index'][i:j] = selection
 
 			# next zone start
-			i += count
+			i += len(selection)
 
 		if transform is not None:
 			lon, lat = np.transpose(struc_array['skycoord'])
@@ -742,7 +788,6 @@ class CatalogueStore(object):
 		for data in self:
 			lon, lat = np.transpose(data['skycoord'])
 			counter += 1
-			print lon.shape
 			# select a subset of points
 			if plot_every > 1:
 				sel = np.random.choice(len(lon), len(lon) // plot_every)
