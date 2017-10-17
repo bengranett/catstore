@@ -5,9 +5,10 @@ import copy
 import catalogue
 import pypelid
 import pypelid.utils.healpix_projection as HP
-import pypelid.utils.hdf5tools as hdf5tools
 import pypelid.utils.misc as misc
 import pypelid.utils.sphere as sphere
+
+import catstore.hdf5tools as hdf5tools
 
 import logging
 

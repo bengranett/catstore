@@ -9,7 +9,8 @@ import textwrap
 import copy
 import time
 import string
-import metafil
+
+import catstore
 
 hash_algorithms = {
 				'M': 'md5',
@@ -760,8 +761,7 @@ class HDF5Catalogue(object):
 			self.storage.close()
 			return
 
-		gitenv = metafil.GitEnv()
-		self.storage.attrs['commit_hash'] = gitenv.hash
+		self.storage.attrs['catstore_version'] = catstore.__version__
 		self.storage.flush()
 		self.storage.close()
 		self.write_header()
@@ -838,9 +838,13 @@ class HDF5Catalogue(object):
 				header.write(message)
 		header.write(self.horizline())
 
-		# write the git environment
-		gitenv = metafil.GitEnv()
-		header.write(gitenv)
+		header.write(
+			"This file was generated with CatStore v{version} by {user} at {date}.".format(
+			version=catstore.__version__,
+			user=os.getenv('USER'),
+			date=time.strftime('%H:%M:%S, %d %b %Y')
+			)
+		)
 
 		# close the header
 		head = header.getvalue()
