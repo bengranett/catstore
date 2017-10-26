@@ -1,5 +1,6 @@
 """ hdf5tools.py """
 import os
+import socket
 import numpy as np
 from pypelid.utils import misc
 import h5py
@@ -839,9 +840,10 @@ class HDF5Catalogue(object):
 		header.write(self.horizline())
 
 		header.write(
-			"This file was generated with CatStore v{version} by {user} at {date}.".format(
+			"This file was generated with CatStore v{version} by {user}@{hostname} at {date}.".format(
 			version=catstore.__version__,
 			user=os.getenv('USER'),
+			hostname=socket.gethostname(),
 			date=time.strftime('%H:%M:%S, %d %b %Y')
 			)
 		)
