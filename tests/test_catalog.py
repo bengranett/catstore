@@ -1,6 +1,8 @@
 import numpy as np
 from catstore import catalogue
-
+import matplotlib
+matplotlib.use('TKAgg')
+from matplotlib import pyplot
 
 def test_query_disk(nqueries=1000, n=10000):
     imagecoord = np.random.uniform(0, 100, (n, 2))
@@ -18,33 +20,35 @@ def test_query_disk(nqueries=1000, n=10000):
         r = np.sum((xy-center)**2, axis=1)**.5
         assert r.max() < rad[i]
 
-def test_query_box(nqueries=10, n=1000):
+def test_query_box(nqueries=100, nangles=20, n=10000):
     imagecoord = np.random.uniform(0, 100, (n, 2))
     data = {'imagecoord': imagecoord}
     cat = catalogue.Catalogue(data)
 
-    x, y = np.random.uniform(0, 100,(2, nqueries))
-    width = np.random.uniform(0.5, 10, nqueries)
-    height = np.random.uniform(0.5, 10, nqueries)
-    # angle = np.random.uniform(0, 360, nqueries)
+    for angle in np.linspace(0, 360, nangles):
+        
+        sintheta = np.sin(angle*np.pi/180)
+        costheta = np.cos(angle*np.pi/180)
 
-    print len(x),len(y),len(width),len(height)
-    results = cat.query_box(x, y, width, height, pad_x=0, pad_y=0, orientation=0)
+        x, y = np.random.uniform(0, 100,(2, nqueries))
+        width = np.random.uniform(1, 5, nqueries)
+        height = np.random.uniform(1, 10, nqueries)
 
-    for i,matches in enumerate(results):
-        print matches
-        if len(matches)==0:
-            continue
-        xy = data['imagecoord'][matches]
-        print xy.shape
-        dx = np.abs(xy[:,0] - x[i]).max()
-        dy = np.abs(xy[:,1] - y[i]).max()
+        results = cat.query_box(x, y, width, height, pad_x=0, pad_y=0, orientation=angle)
 
-        print dx,dy, width[i]/2., height[i]/2.
+        for i,matches in enumerate(results):
+            if len(matches)==0:
+                continue
 
-        assert dx < width[i]/2.
-        assert dy < height[i]/2.
+            xy = data['imagecoord'][matches]
+            dx = xy[:,0] - x[i]
+            dy = xy[:,1] - y[i]
 
-test_query_box()
+            dxt = dx * costheta - dy * sintheta
+            dyt = dx * sintheta + dy * costheta
 
-# test_disk()
+            dxt = np.abs(dxt).max()
+            dyt = np.abs(dyt).max()
+
+            assert dxt < width[i]/2.
+            assert dyt < height[i]/2.
