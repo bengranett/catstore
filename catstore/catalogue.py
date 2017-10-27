@@ -311,8 +311,8 @@ class Catalogue(object):
 		# Loop through coords and find matches ??
 		results = []
 		for i, match in enumerate(matches):
-			if nh>1: h = height[match]
-			if nw>1: w = width[match]
+			if nh>1: h = height[i]
+			if nw>1: w = width[i]
 
 			dx = data_x[match] - cx[i]
 			dy = data_y[match] - cy[i]
