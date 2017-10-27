@@ -8,6 +8,8 @@ import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
 
+import _querycat
+
 class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
 	logger = logging.getLogger(__name__)
@@ -78,6 +80,8 @@ class Catalogue(object):
 				if data is None and len(attrs)>0:
 					self.load({self._spatial_key: attrs[self._spatial_key]})
 		# self.logger.debug("Using %s for spatial index", self._spatial_key)
+
+		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key])
 
 	def __getattr__(self, key):
 		""" Return columns by name 
@@ -220,12 +224,7 @@ class Catalogue(object):
 		""" """
 		return self.__dict__['_meta'][key]
 
-	def build_tree(self):
-		""" Initialize the data structure for fast spatial lookups.
 
-		"""
-		xy = self.__dict__['_data'][self._spatial_key]
-		self._lookup_tree = KDTree(xy)
 
 	def query_disk(self, x, y, radius=1.):
 		""" Find neighbors to a given point (ra, dec).
@@ -245,15 +244,7 @@ class Catalogue(object):
 			indices of objects in selection
 
 		"""
-		try:
-			self._lookup_tree
-		except AttributeError:
-			self.build_tree()
-
-		if self._lookup_tree is None: self.build_tree()
-
-		matches = self._lookup_tree.query_radius(np.transpose([x,y]), radius)
-		return matches
+		return self.Query.query_disk(np.transpose([x,y]), radius)
 
 	def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
 		""" Find objects in a rectangle.
@@ -281,54 +272,14 @@ class Catalogue(object):
 			list of indices of objects in selection
 
 		"""
-		try:
-			len(cx)
-		except TypeError:
-			cx = np.array([cx])
-			cy = np.array([cy])
-		theta = misc.torad(orientation)
-		costheta = np.cos(theta)
-		sintheta = np.sin(theta)
-
-		r = np.sqrt(width**2 + height**2)/2.
-
-		matches = self.query_disk(cx,cy,r)
-
-		data_x, data_y = np.transpose(self.__dict__['_data'][self._spatial_key])
-
-		# Allow width and height to be arrays
-		try:
-			nh = len(height)
-		except TypeError:
-			h = height
-			nh = 1
-		try:
-			nw = len(width)
-		except TypeError:
-			w = width
-			nw = 1
-
-		# Loop through coords and find matches ??
-		results = []
-		for i, match in enumerate(matches):
-			if nh>1: h = height[i]
-			if nw>1: w = width[i]
-
-			dx = data_x[match] - cx[i]
-			dy = data_y[match] - cy[i]
-			dxt = dx * costheta - dy * sintheta
-			dyt = dx * sintheta + dy * costheta
-
-			sel_x = np.abs(dxt) < (w/2. + pad_x)
-			sel_y = np.abs(dyt) < (h/2. + pad_y)
-			sel = np.where(sel_x & sel_y)
-
-			results.append(np.take(match, sel[0]))
-
-		if len(results)==1:
-			return results[0]
-		return results
-
+		return self.Query.query_box(
+						np.transpose([cx, cy]), 
+						width=width,
+						height=height,
+						pad_x=pad_x,
+						pad_y=pad_y,
+						orientation=orientation
+				)
 
 	def plot(self, nplot=10000, **plotparams):
 		""" Make a cartesian image coordinates scatter plot using matplotlib.

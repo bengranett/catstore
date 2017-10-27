@@ -1,4 +1,6 @@
 import numpy as np
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 from catstore import catalogue
 
@@ -14,6 +16,8 @@ def test_query_disk(nqueries=1000, n=10000):
     results = cat.query_disk(x, y, radius=rad)
 
     for i,matches in enumerate(results):
+        if len(matches) == 0:
+            continue
         center = np.array([x[i],y[i]])
         xy = data['imagecoord'][matches]
         r = np.sum((xy-center)**2, axis=1)**.5
@@ -35,13 +39,16 @@ def test_query_box(nqueries=100, nangles=20, n=10000):
 
         results = cat.query_box(x, y, width, height, pad_x=0, pad_y=0, orientation=angle)
 
-        for i,matches in enumerate(results):
-            if len(matches)==0:
+        for i, matches in enumerate(results):
+            if len(matches) == 0:
                 continue
+
+            matches = np.array(matches)
 
             xy = data['imagecoord'][matches]
             dx = xy[:,0] - x[i]
             dy = xy[:,1] - y[i]
+
 
             dxt = dx * costheta - dy * sintheta
             dyt = dx * sintheta + dy * costheta
@@ -49,5 +56,9 @@ def test_query_box(nqueries=100, nangles=20, n=10000):
             dxt = np.abs(dxt).max()
             dyt = np.abs(dyt).max()
 
+
             assert dxt < width[i]/2.
             assert dyt < height[i]/2.
+
+# test_query_disk()
+# test_query_box()

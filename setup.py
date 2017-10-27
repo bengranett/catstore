@@ -3,13 +3,15 @@ See:
 https://packaging.python.org/en/latest/distributing.html
 https://github.com/pypa/sampleproject
 """
+USE_CYTHON = True
 
 # Always prefer setuptools over distutils
-from setuptools import setup, find_packages
+from setuptools import setup, Extension, find_packages
 # To use a consistent encoding
 from codecs import open
 import os
 from os import path
+import numpy
 
 here = path.abspath(path.dirname(__file__))
 
@@ -17,8 +19,41 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
-os.system("git describe && echo __version__=\\\"`git describe`\\\" > catstore/version.py")
+os.system("git describe && echo version = \\\"`git describe`\\\" > catstore/version.py")
 from catstore import version
+
+
+if USE_CYTHON:
+    try:
+        from Cython.Distutils import build_ext
+    except ImportError:
+        if USE_CYTHON=='auto':
+            USE_CYTHON=False
+        else:
+            raise
+
+cmdclass = {}
+ext_modules = []
+
+if USE_CYTHON:
+    ext_modules += [
+        Extension("catstore._querycat",
+            [ "catstore/_querycat.pyx" ],
+            include_dirs=[numpy.get_include()],
+            libraries=['m'],
+            #extra_compile_args = ["-ffast-math","-O3"]
+            #extra_compile_args=['-fopenmp'],
+            #extra_link_args=['-fopenmp'],
+            ),
+    ]
+    cmdclass.update({ 'build_ext': build_ext })
+else:
+    ext_modules += [
+        Extension("catstore._querycat",
+            [ "catstore/_querycat.c" ],
+            include_dirs=[numpy.get_include()],
+            libraries=['m']),
+    ]
 
 setup(
     name='catstore',
@@ -26,7 +61,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version=version.__version__,
+    version=version.version,
 
     description='Interface full-sky astronomical catalogues',
     long_description=long_description,
@@ -68,6 +103,10 @@ setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+
+    cmdclass = cmdclass,
+    ext_modules=ext_modules,
+
 
     # Alternatively, if you want to distribute just a my_module.py, uncomment
     # this:
