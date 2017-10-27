@@ -272,10 +272,13 @@ class Catalogue(object):
 			list of indices of objects in selection
 
 		"""
+		n = len(cx)
+		ones = np.ones(n, dtype=float)
+
 		return self.Query.query_box(
 						np.transpose([cx, cy]), 
-						width=width,
-						height=height,
+						width=width*ones,
+						height=height*ones,
 						pad_x=pad_x,
 						pad_y=pad_y,
 						orientation=orientation
