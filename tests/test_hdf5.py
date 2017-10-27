@@ -2,8 +2,10 @@ import sys
 import numpy as np
 import os
 import tempfile
-import pypelid.utils.hdf5tools as hdf5tools
 import logging
+
+from catstore import hdf5tools
+
 
 logging.basicConfig(level=logging.DEBUG)
 

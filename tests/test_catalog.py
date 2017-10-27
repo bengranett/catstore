@@ -1,8 +1,7 @@
 import numpy as np
+
 from catstore import catalogue
-import matplotlib
-matplotlib.use('TKAgg')
-from matplotlib import pyplot
+
 
 def test_query_disk(nqueries=1000, n=10000):
     imagecoord = np.random.uniform(0, 100, (n, 2))

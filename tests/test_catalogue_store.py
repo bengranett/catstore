@@ -2,9 +2,10 @@ import sys
 import os
 import tempfile
 import numpy as np
-import pypelid.sky.catalogue_store as catalogue_store
 import pypelid.utils.sphere as sphere
 import logging
+
+from catstore import catalogue_store
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,7 +46,7 @@ def check_catalogue_store(n=100, zone_resolution=0):
 	# Load first
 	with catalogue_store.CatalogueStore(filename, 'w', name='test',
 		zone_resolution=zone_resolution, preallocate_file=False) as cat:
-		cat.load(data)
+		cat.append(data)
 		cat.load_attributes(test='ciao')
 		cat.load_attributes(meta)
 		cat.load_units(units)
@@ -55,8 +56,9 @@ def check_catalogue_store(n=100, zone_resolution=0):
 		# Update second by setting 50% of the redshift values to 0
 		p_update = 0.5
 		index_update = np.random.choice([False,True], n, p=[1-p_update,p_update], replace=True)
-		data['redshift'][index_update] = 0.0
-		cat.update(data)
+		data_up = cat.to_structured_array()
+		data_up['redshift'][index_update] = 0.0
+		cat.update(data_up)
 
 	# Compute check sums
 	count = 0
@@ -79,6 +81,8 @@ def check_catalogue_store(n=100, zone_resolution=0):
 	assert(len(check_new_z)+len(check_old_z) == n)
 	assert(np.allclose( check_lon, np.sum(skycoord[:, 0]) ))
 	assert(np.allclose( check_lat, np.sum(skycoord[:, 1]) ))
+
+	redshift = data_up['redshift']
 	assert(np.allclose( np.sort(check_old_z), np.sort(redshift[np.logical_not(index_update)]) ))
 
 	# delete the test file
@@ -132,7 +136,7 @@ def check_catalogue_store_batches(n=100, zone_resolution=0):
 			i += batch
 
 		cat.allocate(dtypes)
-		cat.load(data)
+		cat.append(data)
 		cat.load_attributes(meta)
 		cat.load_units(units)
 		cat.load_description(description)
