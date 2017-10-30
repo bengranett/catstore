@@ -11,7 +11,7 @@ cimport libc.math as math
 DEG_TO_RAD = np.pi / 180.
 
 
-cdef class QueryCat(object):
+cdef class QueryCat:
 	""" """
 	cdef double [:,:] xy
 	cdef object _lookup_tree
@@ -22,7 +22,7 @@ cdef class QueryCat(object):
 		self.xy = xy
 		self._lookup_tree = KDTree(xy)
 
-	def query_disk(self, double [:,:] centers, double [:] radius):
+	cpdef query_disk(self, double [:,:] centers, double [:] radius):
 		""" Find neighbors to a given point (ra, dec).
 
 		Parameters
@@ -42,7 +42,7 @@ cdef class QueryCat(object):
 		"""
 		return self._lookup_tree.query_radius(centers, radius)
 
-	def query_box(self,  double[:,:] centers, double[:] width, double[:] height, double pad_x=0.0, double pad_y=0.0, double orientation=0.):
+	cpdef query_box(self,  double[:,:] centers, double[:] width, double[:] height, double pad_x=0.0, double pad_y=0.0, double orientation=0.):
 		""" Find objects in a rectangle.
 
 		Parameters
