@@ -19,7 +19,7 @@ class Catalogue(object):
 	_required_meta = ()
 	_immutable_attributes = ('_coordinate_system', '_required_columns', '_required_meta', '_immutable_attributes')
 
-	def __init__(self, data=None, metadata=None, **attrs):
+	def __init__(self, data=None, scale_x=1, scale_y=1, angle=0, metadata=None, **attrs):
 		"""
 		Parameters
 		----------
@@ -81,7 +81,7 @@ class Catalogue(object):
 					self.load({self._spatial_key: attrs[self._spatial_key]})
 		# self.logger.debug("Using %s for spatial index", self._spatial_key)
 
-		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key])
+		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key], scale_x=scale_x, scale_y=scale_y, angle=angle)
 
 	def __getattr__(self, key):
 		""" Return columns by name 
