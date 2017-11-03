@@ -275,7 +275,7 @@ class Catalogue(object):
 		n = len(cx)
 		ones = np.ones(n, dtype=float)
 
-		return self.Query.query_box(
+		matches, eff = self.Query.query_box(
 						np.transpose([cx, cy]), 
 						width=width*ones,
 						height=height*ones,
@@ -283,6 +283,8 @@ class Catalogue(object):
 						pad_y=pad_y,
 						orientation=orientation
 				)
+		self.logger.debug("Query efficiency %f", eff)
+		return matches
 
 	def plot(self, nplot=10000, **plotparams):
 		""" Make a cartesian image coordinates scatter plot using matplotlib.

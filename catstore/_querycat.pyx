@@ -1,4 +1,5 @@
 #cython: boundscheck=False, wraparound=False, nonecheck=False, cdivision=True
+# cython: profile=True
 
 import logging
 import numpy as np
@@ -109,7 +110,7 @@ cdef class QueryCat:
 		cdef long i, j, k, n, m, c
 		cdef object[:] matches
 		cdef long[:] match
-		cdef double dx, dy, cx, cy, w1, h1, w2, h2, a, b
+		cdef double dx, dy, cx, cy, w1, h1, w2, h2, a, b, eff
 		cdef double theta = orientation * DEG_TO_RAD
 		cdef double costheta = math.cos(theta)
 		cdef double sintheta = math.sin(theta)
@@ -147,6 +148,9 @@ cdef class QueryCat:
 
 		cdef object[:] results = np.zeros(n, dtype=object)
 
+		cdef long count = 0
+		cdef long count_tot = 0
+
 		for i in range(n):
 
 			match = matches[i]
@@ -171,6 +175,8 @@ cdef class QueryCat:
 				if (math.fabs(dx) < w1) and (math.fabs(dy) < h1):
 					select[c] = k
 					c += 1
+			count += c
+			count_tot += m
 
 			s = np.zeros(c, dtype=int)
 			for j in range(c):
@@ -178,4 +184,6 @@ cdef class QueryCat:
 
 			results[i] = s
 
-		return results
+		eff = <double> count / <double> count_tot
+
+		return results, eff
