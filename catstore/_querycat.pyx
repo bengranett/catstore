@@ -181,7 +181,7 @@ cdef class QueryCat:
 			count_tot += m
 
 			if c == 0:
-				results[i] = np.array([])
+				results[i] = np.array([], dtype=int)
 			else:
 				s = cvarray(shape=(c,), itemsize=sizeof(long), format='l')
 				for j in range(c):
