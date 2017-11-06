@@ -1,5 +1,4 @@
 #cython: boundscheck=False, wraparound=False, nonecheck=False, cdivision=True
-# cython: profile=True
 
 import logging
 import numpy as np
@@ -11,7 +10,7 @@ cimport libc.math as math
 
 DEF DEG_TO_RAD = 3.141592653589793 / 180.
 
-cdef inline void rotate(double *x, double *y, double costheta, double sintheta):
+cdef inline void rotate(double *x, double *y, double costheta, double sintheta) nogil:
 	""" Rotate a coordinate pair in 2 dimensions around the origin. """
 	cdef double xt = x[0] * costheta - y[0] * sintheta
 	y[0] = x[0] * sintheta + y[0] * costheta
@@ -114,39 +113,42 @@ cdef class QueryCat:
 		cdef double theta = orientation * DEG_TO_RAD
 		cdef double costheta = math.cos(theta)
 		cdef double sintheta = math.sin(theta)
+		cdef double invsintheta = -sintheta
 
 		cdef double [:,:] data_xy = self.xy
 
-		n = width.shape[0]
+		n = centers.shape[0]
 		m = data_xy.shape[0]
 
 		cdef double[:] r = cvarray(shape=(n,), itemsize=sizeof(double), format='d')
 		cdef long[:] select = cvarray(shape=(m,), itemsize=sizeof(long), format='l')
+
 		cdef long[:] s
 
-		for i in range(n):
-			w1 = width[i]
-			h1 = height[i]
+		with nogil:
+			for i in range(n):
+				w1 = width[i]
+				h1 = height[i]
 
-			w2 = width[i]
-			h2 = -height[i]
+				w2 = width[i]
+				h2 = -height[i]
 
-			rotate(&w1,&h1,costheta,-sintheta)
-			rotate(&w2,&h2,costheta,-sintheta)
-			rotate(&w1,&h1,self.costheta,self.sintheta)
-			rotate(&w2,&h2,self.costheta,self.sintheta)
+				rotate(&w1,&h1,costheta,invsintheta)
+				rotate(&w2,&h2,costheta,invsintheta)
+				rotate(&w1,&h1,self.costheta,self.sintheta)
+				rotate(&w2,&h2,self.costheta,self.sintheta)
 
-			a = w1*w1*self.scale_x*self.scale_x + h1*h1*self.scale_y*self.scale_y
-			b = w2*w2*self.scale_x*self.scale_x + h2*h2*self.scale_y*self.scale_y
+				a = w1*w1*self.scale_x*self.scale_x + h1*h1*self.scale_y*self.scale_y
+				b = w2*w2*self.scale_x*self.scale_x + h2*h2*self.scale_y*self.scale_y
 
-			if a > b:
-				r[i] = math.sqrt(a)/2.
-			else:
-				r[i] = math.sqrt(b)/2.
+				if a > b:
+					r[i] = math.sqrt(a)/2.
+				else:
+					r[i] = math.sqrt(b)/2.
 
 		matches = self.query_disk(centers, r)
 
-		cdef object[:] results = np.zeros(n, dtype=object)
+		cdef np.ndarray results = np.zeros(n, dtype='object')
 
 		cdef long count = 0
 		cdef long count_tot = 0
@@ -178,11 +180,13 @@ cdef class QueryCat:
 			count += c
 			count_tot += m
 
-			s = np.zeros(c, dtype=int)
-			for j in range(c):
-				s[j] = select[j]
-
-			results[i] = s
+			if c == 0:
+				results[i] = np.array([])
+			else:
+				s = cvarray(shape=(c,), itemsize=sizeof(long), format='l')
+				for j in range(c):
+					s[j] = select[j]
+				results[i] = s
 
 		eff = <double> count / <double> count_tot
 

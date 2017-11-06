@@ -31,6 +31,7 @@ if USE_CYTHON:
             USE_CYTHON=False
         else:
             raise
+            
 
 cmdclass = {}
 ext_modules = []
@@ -41,6 +42,7 @@ if USE_CYTHON:
             [ "catstore/_querycat.pyx" ],
             include_dirs=[numpy.get_include()],
             libraries=['m'],
+            define_macros=[('CYTHON_TRACE', '1')],
             #extra_compile_args = ["-ffast-math","-O3"]
             #extra_compile_args=['-fopenmp'],
             #extra_link_args=['-fopenmp'],
