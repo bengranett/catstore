@@ -12,11 +12,29 @@ import time
 import string
 
 import catstore
+from pyblake2 import blake2b
+
 
 hash_algorithms = {
 				'M': 'md5',
 				'B': 'blake2'
 				}
+
+def get_hasher(algorithm):
+	try:
+		algorithm_name = hash_algorithms[algorithm]
+	except KeyError:
+		algorithm_name = algorithm
+
+	if algorithm_name == 'blake2':
+		from pyblake2 import blake2b
+		hasher = blake2b(digest_size=digest_size)
+	elif algorithm_name == 'md5':
+		from hashlib import md5
+		hasher = md5()
+	else:
+		raise HDF5CatError("Unrecognized hash algorithm (%s)" % algorithm)
+	return hasher
 
 def hash_it(filename, hash_length=32, reserved=8, skip=None,
 			store_hash_in_file=False, chunk_size=1048576,
@@ -716,6 +734,60 @@ class HDF5Catalogue(object):
 		self.metadata['done'] = done
 		self.logger.debug("Data done flag: %s", self.metadata['done'])
 		return done
+
+	def write_data_hash(self, columns=None, validate=False, overwrite=False, digest_size=16):
+		""" """
+		fail = False
+		data_hash = blake2b(digest_size=digest_size)
+		for group in self.data:
+			g = self.data[group]
+
+			if columns is None:
+				columns = g.keys()
+
+			group_hash = blake2b(digest_size=digest_size)
+			for dataset in columns:
+				digest = blake2b(g[dataset][:],digest_size=digest_size).hexdigest()
+
+				if validate:
+					if g[dataset].attrs['_hash'] != digest:
+						logging.warning("dataset has changed '%s/%s'", group, dataset)
+						fail = True
+					else:
+						logging.debug(u"\u2714 '%s/%s'", group, dataset)
+				else:
+					if '_hash' in g[dataset].attrs and not overwrite:
+						raise ValueError("Will not overwrite data hashes")
+					g[dataset].attrs['_hash'] = digest
+					logging.debug("wrote hash '%s/%s'", group, dataset)
+
+				group_hash.update(digest)
+
+			digest = group_hash.hexdigest()
+
+			if validate:
+				if g.attrs['_hash'] != digest:
+					logging.warning("group has changed '%s'", group)
+					fail = True
+			else:
+				g.attrs['_hash'] = digest
+			data_hash.update(digest)
+
+		digest = data_hash.hexdigest()
+
+		if validate:
+			if self.data.attrs['_hash'] != digest:
+				logging.warning("data has changed")
+				fail = True
+		else:
+			self.data.attrs['_hash'] = digest
+			self.storage.attrs['_hash'] = digest
+
+		return fail
+
+	def validate_data(self, columns=None):
+		""" """
+		self.write_data_hash(columns=columns, validate=True)
 
 	def update_metagroup(self, group_name, attributes, **attrs):
 		""" Create a group to store metadata.
