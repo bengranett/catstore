@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 __version__ = ''
@@ -6,7 +7,7 @@ __version__ = ''
 try:
     # if we are running in a git repo, look up the hash
     __version__ = subprocess.Popen(
-        ('git','--git-dir',os.path.dirname(__file__),'describe','--always'),
+        ('git','-C',os.path.dirname(__file__),'describe','--always','--dirty','--broken'),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()[0]
     assert __version__
 except:

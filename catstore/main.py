@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import argparse
+from catstore import __version__
 from catalogue_store import CatalogueStore
 
 
@@ -37,6 +38,7 @@ def verify(args):
 def main():
 	parser = argparse.ArgumentParser(prog='CatStore', description="CatStore")
 
+	parser.add_argument('--version', action='version', version=__version__, help='show version and exit')
 	parser.add_argument("-v", "--verbose", metavar='n', default=3, type=int, help='verbosity (0,1,2,3)')
 
 	subparser = parser.add_subparsers(title='commands')
