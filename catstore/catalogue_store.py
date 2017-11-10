@@ -766,9 +766,9 @@ class CatalogueStore(object):
 		""" """
 		self._h5file.validate_data(columns)
 
-	def show(self):
+	def show(self, **kwargs):
 		""" """
-		self._h5file.show()
+		self._h5file.show(**kwargs)
 
 	def plot(self, plot_every=1, s=5., lw=0., cmap='jet'):
 		""" Create a Mollweide projected plot of the objects.

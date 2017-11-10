@@ -10,7 +10,7 @@ def show(args):
 	""" list contents of file """
 	for path in args.path:
 		with CatalogueStore(path) as cat:
-			cat.show()
+			cat.show(datasets=args.datasets, attrs=args.attrs)
 
 def show_head(args):
 	""" print the human readable header """
@@ -43,9 +43,11 @@ def main():
 
 	subparser = parser.add_subparsers(title='commands')
 
-	parser_add = subparser.add_parser('show', help='list contents of a catstore file')
-	parser_add.add_argument("path", metavar='path', nargs='*', type=str, help="path to catstore file")
-	parser_add.set_defaults(func=show)
+	parser_show = subparser.add_parser('show', help='list contents of a catstore file')
+	parser_show.add_argument("path", metavar='path', nargs='*', type=str, help="path to catstore file")
+	parser_show.add_argument("--datasets", "-d", action='store_true', help="list datasets")
+	parser_show.add_argument("--attrs", "-a", action='store_true', help="list attributes")
+	parser_show.set_defaults(func=show)
 
 	parser_add = subparser.add_parser('head', help='show the human-readable header of a catstore file')
 	parser_add.add_argument("path", metavar='path', nargs='*', type=str, help="path to catstore file")

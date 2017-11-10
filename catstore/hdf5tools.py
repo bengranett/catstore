@@ -868,7 +868,7 @@ class HDF5Catalogue(object):
 
 		reserved = len(self.params['stamp']) + self.params['hash_info_len'] + self.params['hash_algo_len']
 		header_bytes = self.params['header_bytes'] - self.params['hash_length'] - reserved
-		self.logger.debug("HDF5 File %s has header block size %i.", self.filename, header_bytes)
+		# self.logger.debug("HDF5 File %s has header block size %i.", self.filename, header_bytes)
 
 		header = StringIO.StringIO()
 		header.write(" " * header_bytes)
@@ -882,6 +882,8 @@ class HDF5Catalogue(object):
 
 		for group_name in f:
 			if group_name in self.params['special_group_names'].values():
+				continue
+			if group_name.startswith("_"):
 				continue
 			header.write(self.format_attr(group_name, f[group_name].attrs))
 
@@ -950,7 +952,7 @@ class HDF5Catalogue(object):
 				f.write(algorithm_code)
 				f.write(digest)
 
-	def show(self, thing=None, pre="", level=0):
+	def show(self, thing=None, pre="", level=0, datasets=False, attrs=False):
 		""" Show what is in the file. """
 		if thing is None:
 			thing = self.storage
@@ -960,11 +962,12 @@ class HDF5Catalogue(object):
 			return
 
 		try:
-			attrs = thing.attrs
+			attrib = thing.attrs
 		except:
-			attrs = None
-		if attrs is not None:
-			self.show(attrs, pre=pre, level=level)
+			attrib = None
+		if attrib is not None:
+			if attrs:
+				self.show(attrib, pre=pre, level=level, datasets=datasets, attrs=attrs)
 
 		for key, value in thing.items():
 
@@ -974,6 +977,8 @@ class HDF5Catalogue(object):
 			if isinstance(value, h5py.Group):
 				s = str(value)
 			elif isinstance(value, h5py.Dataset):
+				if not datasets:
+					continue
 				if value.size == 1:
 					s = value[()]
 				else:
@@ -982,7 +987,7 @@ class HDF5Catalogue(object):
 				s = str(value)
 
 			print "%s%s%s: %s"%("   "*level, pre, key, s)
-			self.show(value, pre+"\__",level+1)
+			self.show(value, pre+"\__",level+1, datasets=datasets, attrs=attrs)
 
 
 class HDF5CatError(Exception):
