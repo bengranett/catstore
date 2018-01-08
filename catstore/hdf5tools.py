@@ -281,7 +281,7 @@ class HDF5Catalogue(object):
 		'header_line_width': 80,
 		'chunk_size': 1024,
 		'hash_length': 32,
-		'header_bytes': 4096,
+		'header_bytes': 8192,
 		'stamp': 'pypelid',
 		'hashit': True,
 		'hash_info_len': 2,
