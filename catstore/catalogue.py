@@ -80,8 +80,30 @@ class Catalogue(object):
 				if data is None and len(attrs)>0:
 					self.load({self._spatial_key: attrs[self._spatial_key]})
 		# self.logger.debug("Using %s for spatial index", self._spatial_key)
+		self.__dict__['_scale'] = (scale_x, scale_y, angle)
+		self.__dict__['Query'] = None
 
-		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key], scale_x=scale_x, scale_y=scale_y, angle=angle)
+	def __getstate__(self):
+		""" """
+		state = (
+			self.__dict__['_meta'],
+			self.__dict__['_data'],
+			self.__dict__['_spatial_key'],
+			self.__dict__['_scale'],
+			self.__dict__['columns'],
+		)
+		return state
+
+	def __setstate__(self, state):
+		""" """
+		meta, data, spatial_key, scale, columns = state
+		self.__dict__['_meta'] = meta
+		self.__dict__['_data'] = data
+		self.__dict__['_spatial_key'] = spatial_key
+		self.__dict__['_scale'] = scale
+		self.__dict__['columns'] = columns
+		scale_x, scale_y, angle = scale
+		self.Query = None
 
 	def __getattr__(self, key):
 		""" Return columns by name 
@@ -159,6 +181,12 @@ class Catalogue(object):
 		arr = store.to_structured_array()
 		self.columns = list(arr.dtype.names)
 		self.__dict__['_data'] = arr
+
+	def init_query(self):
+		""" """
+		scale_x, scale_y, angle = self.__dict__['_scale']
+		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key], scale_x=scale_x, scale_y=scale_y, angle=angle)
+
 
 	def load(self, data):
 		""" Import the data array into the Catalogue class.
@@ -244,6 +272,9 @@ class Catalogue(object):
 			indices of objects in selection
 
 		"""
+		if not self.Query:
+			self.init_query()
+
 		return self.Query.query_disk(np.transpose([x,y]), radius)
 
 	def query_box(self,  cx, cy, width=1, height=1, pad_x=0.0, pad_y=0.0, orientation=0.):
@@ -272,6 +303,9 @@ class Catalogue(object):
 			list of indices of objects in selection
 
 		"""
+		if not self.Query:
+			self.init_query()
+
 		n = len(cx)
 		ones = np.ones(n, dtype=float)
 
