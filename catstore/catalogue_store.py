@@ -508,7 +508,7 @@ class CatalogueStore(object):
 
 		return np.dtype(dtypes)
 
-	def to_structured_array(self, columns=None, zones=None):
+	def to_structured_array(self, columns=None, zones=None, start=0, end=None):
 		""" Convert the data stored in the CatalogueStore to a numpy structured array.
 
 		Parameters
@@ -523,6 +523,14 @@ class CatalogueStore(object):
 		---------
 		numpy structured array
 		"""
+		if end is not None:
+			select = True
+			assert start < end
+			assert len(zones) == 1
+		else:
+			start = 0
+			select = False
+
 		dtype = self.get_dtype()
 		if columns is not None:
 			d = []
@@ -552,12 +560,24 @@ class CatalogueStore(object):
 			for zone in zones:
 				count += self._retrieve_zone(zone).attrs['count']
 
+		if select:
+			count_s = end - start
+			assert count_s <= count
+			count = count_s
+
 		struc_array = np.zeros(count, dtype=dtype)
 
 		i = 0
 		for zone in zones:
 			group = self._retrieve_zone(zone)
 			count = group.attrs['count']
+			if select:
+				count_s = end - start
+				assert count_s <= count
+				count = count_s
+			else:
+				end = count
+
 			j = i + count
 
 			if columns is None:
@@ -567,7 +587,7 @@ class CatalogueStore(object):
 				if not name in group:
 					continue
 				column = group[name]
-				struc_array[name.encode('ascii')][i:j] = column
+				struc_array[name.encode('ascii')][i:j] = column[start:end]
 
 			struc_array['_zone'][i:j] = np.ones(count) * int(zone)
 			struc_array['_index'][i:j] = np.arange(count)
@@ -697,6 +717,8 @@ class CatalogueStore(object):
 		# Return none if no objects fall into the rectangle
 		if len(matches) == 0:
 			return None
+
+		assert count > 0
 
 		# construct the dtype for requested columns
 		dtype = self.get_dtype()
