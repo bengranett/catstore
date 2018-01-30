@@ -715,10 +715,8 @@ class CatalogueStore(object):
 		logging.debug('Found ' + str(count) + ' objects at (' + str(clon) + ',' + str(clat) + ').')
 
 		# Return none if no objects fall into the rectangle
-		if len(matches) == 0:
+		if count == 0:
 			return None
-
-		assert count > 0
 
 		# construct the dtype for requested columns
 		dtype = self.get_dtype()
