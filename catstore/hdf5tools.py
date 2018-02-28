@@ -1,4 +1,6 @@
 """ hdf5tools.py """
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import socket
 import numpy as np

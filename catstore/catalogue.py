@@ -3,7 +3,6 @@
 
 import logging
 import numpy as np
-import h5py
 import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
