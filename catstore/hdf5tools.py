@@ -290,7 +290,8 @@ class HDF5Catalogue(object):
 		'preallocate_file': True,
 		'compression': {},
 		'title': 'PYPELID CATALOGUE',
-		'overwrite': False
+		'overwrite': False,
+		'libver': 'latest',
 	}
 
 
@@ -326,10 +327,11 @@ class HDF5Catalogue(object):
 
 		if mode == 'r':
 			self.readonly = True
-			self.storage = h5py.File(filename, mode=mode)
+			self.storage = h5py.File(filename, mode=mode, libver=self.params['libver'])
 		else:
 			self.storage = h5py.File(filename, mode=mode,
-									userblock_size=self.params['header_bytes'])
+									userblock_size=self.params['header_bytes'],
+									libver=self.params['libver'])
 
 		self.attributes = self.storage.attrs
 
