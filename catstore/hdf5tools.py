@@ -16,6 +16,7 @@ import string
 import catstore
 from pyblake2 import blake2b
 
+Group = h5py._hl.group.Group
 
 hash_algorithms = {
 				'M': 'md5',

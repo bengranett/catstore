@@ -6,8 +6,7 @@ import numpy as np
 import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
-
-import _querycat
+from catstore import hdf5tools, _querycat
 
 class Catalogue(object):
 	""" Base catalogue class. Internal to Pypelid. """
@@ -184,7 +183,7 @@ class Catalogue(object):
 	def init_query(self):
 		""" """
 		scale_x, scale_y, angle = self.__dict__['_scale']
-		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key], scale_x=scale_x, scale_y=scale_y, angle=angle)
+		self.Query = _querycat.QueryCat(self.__dict__['_data'][self._spatial_key][:], scale_x=scale_x, scale_y=scale_y, angle=angle)
 
 
 	def load(self, data):
@@ -195,7 +194,6 @@ class Catalogue(object):
 			data : dict or numpy.recarray
 				the input data table
 		"""
-
 		# Test if conversion to structured array is needed
 
 		convert = False
@@ -232,7 +230,10 @@ class Catalogue(object):
 			except KeyError:
 				raise Exception('Data array is missing a required column: %s'%column)
 
-		# Finally assign the dictionary to the class instance attribute
+		if isinstance(data, hdf5tools.Group):
+			self.__dict__['_data'] = data
+			return
+
 		if convert:
 			self.__dict__['_data'] = misc.dict_to_structured_array(data)
 		else:
@@ -328,7 +329,7 @@ class Catalogue(object):
 			Maximum number of objects to show in the plot.
 
 		"""
-		xy = self.__dict__['_data'][self._spatial_key]
+		xy = self.__dict__['_data'][self._spatial_key][:]
 
 		# Subsample a big catalogue
 		if len(self) > nplot:

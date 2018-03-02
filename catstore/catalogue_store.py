@@ -6,7 +6,7 @@ import pypelid.utils.healpix_projection as HP
 import pypelid.utils.misc as misc
 import pypelid.utils.sphere as sphere
 
-from catstore import catalogue, hdf5tools
+from catstore import hdf5tools, catalogue
 
 import logging
 
