@@ -86,6 +86,8 @@ class CatalogueStore(object):
 						'official_stamp': 'pypelid',
 						'preallocate_file': True,
 						'overwrite': False,
+						'libver': 'latest',
+						'driver': None,
 						}
 
 	_immutable_columns = ('index', 'zone', '_index', '_zone', 'skycoord')
@@ -153,7 +155,7 @@ class CatalogueStore(object):
 		#							require_hash=self.params['require_hash'],
 		#								official_stamp=self.params['official_stamp'])
 
-		with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite']) as h5file:
+		with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite'], libver=self.params['libver']) as h5file:
 
 			# ensure that required attributes are there with acceptable values.
 			for key, options in self._required_attributes.items():
@@ -235,7 +237,9 @@ class CatalogueStore(object):
 		self._h5file = hdf5tools.HDF5Catalogue(filename,
 											mode=mode,
 											preallocate_file=self.params['preallocate_file'],
-											overwrite=self.params['overwrite'])
+											overwrite=self.params['overwrite'],
+											libver=self.params['libver'],
+											driver=self.params['driver'])
 		# access the data group
 		self._datastore = self._h5file.data
 		self._metadata = self._h5file.metadata

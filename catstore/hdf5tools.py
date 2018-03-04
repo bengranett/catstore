@@ -295,6 +295,7 @@ class HDF5Catalogue(object):
 		'title': 'PYPELID CATALOGUE',
 		'overwrite': False,
 		'libver': 'latest',
+		'driver': None,
 	}
 
 
@@ -330,11 +331,12 @@ class HDF5Catalogue(object):
 
 		if mode == 'r':
 			self.readonly = True
-			self.storage = h5py.File(filename, mode=mode, libver=self.params['libver'])
+			self.storage = h5py.File(filename, mode=mode, libver=self.params['libver'], driver=self.params['driver'])
 		else:
 			self.storage = h5py.File(filename, mode=mode,
 									userblock_size=self.params['header_bytes'],
-									libver=self.params['libver'])
+									libver=self.params['libver'],
+									driver=self.params['driver'])
 
 		self.attributes = self.storage.attrs
 
@@ -369,6 +371,8 @@ class HDF5Catalogue(object):
 		assert self.params['chunk_size'] is None or self.params['chunk_size'] > 0
 		assert isinstance(self.params['stamp'], str)
 		assert isinstance(self.params['title'], str)
+		assert self.params['libver'] in (None,'latest','earliest')
+		assert self.params['driver'] in (None,'core','family')
 
 	def __enter__(self):
 		""" """
