@@ -329,6 +329,8 @@ class HDF5Catalogue(object):
 			if os.path.exists(filename) and not self.params['overwrite']:
 				raise HDF5CatError("File %s exists.  Will not overwrite."%filename)
 
+		logging.info("HDF5 driver: %s", self.params['driver'])
+
 		if mode == 'r':
 			self.readonly = True
 			self.storage = h5py.File(filename, mode=mode, libver=self.params['libver'], driver=self.params['driver'])
