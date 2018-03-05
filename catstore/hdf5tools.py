@@ -282,7 +282,7 @@ class HDF5Catalogue(object):
 		'special_group_names': {'data': 'data', 'columns': 'columns',
 								'units': 'units', 'description': 'description'},
 		'header_line_width': 80,
-		'chunk_size': 1024,
+		'chunk_size': None,
 		'hash_length': 32,
 		'header_bytes': 8192,
 		'stamp': 'pypelid',
@@ -329,7 +329,9 @@ class HDF5Catalogue(object):
 			if os.path.exists(filename) and not self.params['overwrite']:
 				raise HDF5CatError("File %s exists.  Will not overwrite."%filename)
 
+		logging.info("HDF5 chunk_size: %s", self.params['chunk_size'])
 		logging.info("HDF5 driver: %s", self.params['driver'])
+		logging.info("HDF5 libver: %s", self.params['libver'])
 
 		if mode == 'r':
 			self.readonly = True
@@ -517,12 +519,17 @@ class HDF5Catalogue(object):
 		maxshape[0] = nmax
 		maxshape = tuple(maxshape)
 
-		if nmax < chunkshape[0]:
+		if chunkshape and nmax < chunkshape[0]:
 			# self.logger.debug("Dataset is too small for chunking (chunkshape %s, nmax %s)", chunkshape, nmax)
 			chunkshape = None
 
-		group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
+		if not chunkshape:
+			maxshape = None
 
+		# self.logger.debug("create dataset %s, shape %s, max %s, chunk %s", name, arr.shape, maxshape, chunkshape)
+
+		group.create_dataset(name, data=arr, maxshape=maxshape, chunks=chunkshape, **self.params['compression'])
+		# self.logger.debug("dataset %s, chunks %s",name, group[name].chunks)
 		# determine the number of elements per data row if 2 dimensional
 		if len(arr.shape) <= 1:
 			dim = len(arr.shape)
@@ -558,7 +565,7 @@ class HDF5Catalogue(object):
 		if dim + len(arr) > group[name].shape[0]:
 			raise HDF5CatError("Cannot update dataset %s.%s Allocated dataset is too small to fit the input array."%(group_name,name))
 		group[name][dim:dim + len(arr)] = arr
-		self.logger.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
+		# self.logger.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
 
 	def append_group(self, group_name, data, index=None):
 		""" Append data to a group. 
@@ -666,7 +673,7 @@ class HDF5Catalogue(object):
 		else:
 			raise Exception("unknown operation %s"%operation)
 
-		self.logger.debug("update %s dataset at specified indices: %s %s chunky:%s", operation, name,group[name].shape,group[name].chunks)
+		# self.logger.debug("update %s dataset at specified indices: %s %s chunky:%s", operation, name,group[name].shape,group[name].chunks)
 
 	def update_group(self, group_name, data, index, operation):
 		""" update data in a group.
