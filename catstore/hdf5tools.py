@@ -329,9 +329,9 @@ class HDF5Catalogue(object):
 			if os.path.exists(filename) and not self.params['overwrite']:
 				raise HDF5CatError("File %s exists.  Will not overwrite."%filename)
 
-		logging.info("HDF5 chunk_size: %s", self.params['chunk_size'])
-		logging.info("HDF5 driver: %s", self.params['driver'])
-		logging.info("HDF5 libver: %s", self.params['libver'])
+		logging.debug("HDF5 chunk_size: %s", self.params['chunk_size'])
+		logging.debug("HDF5 driver: %s", self.params['driver'])
+		logging.debug("HDF5 libver: %s", self.params['libver'])
 
 		if mode == 'r':
 			self.readonly = True
