@@ -1,4 +1,5 @@
 """ hdf5tools.py """
+import signal
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
@@ -384,7 +385,18 @@ class HDF5Catalogue(object):
 
 	def __exit__(self, type, value, traceback):
 		""" ensure the hdf5 file is closed. """
+		# Ignore INT and TERM signals while closing the file
+		state = {}
+		for sig in (signal.SIGINT, signal.SIGTERM):
+			state[sig] = signal.signal(sig, signal.SIG_IGN)
+
+		self.logger.debug("closing file `%s`...", self.filename)
 		self.close()
+		self.logger.debug("file closed `%s`.", self.filename)
+
+		# reset signal handler
+		for sig, handler in state.items():
+			signal.signal(sig, handler)
 
 	def __str__(self):
 		""" """
