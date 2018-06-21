@@ -3,7 +3,6 @@
 
 import logging
 import numpy as np
-import fitsio
 from sklearn.neighbors import KDTree
 from pypelid.utils import sphere, misc
 from catstore import hdf5tools, _querycat
