@@ -298,6 +298,12 @@ class CatalogueStore(object):
 	# For backward compatability rename preprocess to preload
 	preload = preprocess
 
+	def preprocess_zonecount(self, zone, count):
+		""" """
+		zone_counts = self._metadata['zone_counts']
+		zone_counts[zone] += count
+		self._metadata['zone_counts'] = zone_counts
+
 	def allocate(self, dtypes):
 		""" Pre-allocate the file.
 
@@ -334,6 +340,34 @@ class CatalogueStore(object):
 
 		zone_index = self._index(*data['skycoord'].transpose())
 		self._h5file.append(zone_index, data)
+
+		self._datastore = self._h5file.data
+
+		try:
+			self._attributes['count']
+		except KeyError:
+			self._attributes['count'] = 0
+
+		# Save the number of rows in table (i.e. total number of objects in the catalogue)
+		if isinstance(data, dict):
+			key, arr = data.items()[0]
+			count = len(arr)
+		else:
+			count = len(data)
+		self._attributes['count'] += count
+
+	def append_zone(self, zone_index, data):
+		""" Add data to the file.
+
+		Parameters
+		----------
+		data : dict or numpy structured array
+		"""
+		if self.readonly:
+			self.logger.warning("File is readonly! %s", self.filename)
+			return
+
+		self._h5file.append_group(zone_index, data)
 
 		self._datastore = self._h5file.data
 
