@@ -319,6 +319,46 @@ class Catalogue(object):
 		self.logger.debug("Query efficiency %f", eff)
 		return matches
 
+	def retrieve(self, clon, clat, width=1, height=1, pad_ra=0.0, pad_dec=0.0,
+					orientation=0, transform=None, columns=None):
+		""" Select objects in a rectangle and return a projected catalogue object.
+
+		Parameters
+		----------
+		clon : float
+			center ra
+		clat : float
+			center dec
+		width : float
+			rectangle width (degrees)
+		height : float
+			rectangle height (degrees)
+		pad_ra : float
+			add this padding to width (degrees)
+		pad_dec : float
+			add this padding to dec (degrees)
+		orientation : float
+			rotation angle (degrees about center from North increasing toward the East)
+		transform : function
+			a function that will be called to map sky coordinates to cartesian coordinates.
+
+		Returns
+		-------
+		Catalogue : Catalogue object
+		"""
+		lon,lat = np.transpose(self._data['skycoord'])
+		dlon, dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)],
+									inverse=True)
+
+		sel_lon = np.abs(dlon) < (width / 2. + pad_ra)
+		sel_lat = np.abs(dlat) < (height / 2. + pad_dec)
+		sel = np.where(sel_lon & sel_lat)
+		data = self._data[sel]
+		if transform is not None:
+			ximage, yimage = transform(lon[sel], lat[sel])
+			data['imagecoord'] = np.transpose([ximage, yimage])
+		return Catalogue(data=data)
+
 	def plot(self, nplot=10000, **plotparams):
 		""" Make a cartesian image coordinates scatter plot using matplotlib.
 
