@@ -42,7 +42,7 @@ def get_hasher(algorithm):
 
 def hash_it(filename, hash_length=32, reserved=8, skip=None,
 			store_hash_in_file=False, chunk_size=1048576,
-			algorithm='blake2'):
+			algorithm='blake2', max_file_size=1024):
 	""" Compute hash of a file.
 
 	If the hash is stored in the first few bytes of the file these bytes can be
@@ -62,6 +62,9 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None,
 		hash chunk size
 	algorithm :  str
 		hashing algorithm can be 'blake2' or 'md5'
+	max_file_size : float
+		hashing will stop after processing up to max_file_size in MB.
+
 	Outputs
 	-------
 	str : digest
@@ -93,13 +96,15 @@ def hash_it(filename, hash_length=32, reserved=8, skip=None,
 
 	#logging.debug("reserved %i",reserved)
 
+	num_chunks = (max_file_size * 1024**2) // chunk_size
+
 	with open(filename, 'rb') as f:
 		if store_hash_in_file:
 			f.seek(hash_length + reserved)
 
 		count = 0
 		#logging.debug("reading file")
-		while True:
+		while count < num_chunks:
 			chunk = f.read(chunk_size)
 			if chunk == '':
 				break
