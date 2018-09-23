@@ -7,6 +7,7 @@ import socket
 import numpy as np
 from pypelid.utils import misc
 import h5py
+import h5py_cache
 import StringIO
 import logging
 import textwrap
@@ -302,6 +303,7 @@ class HDF5Catalogue(object):
 		'overwrite': False,
 		'libver': 'latest',
 		'driver': None,
+		'chunk_cache_mem_size': 1024**3
 	}
 
 
@@ -343,7 +345,8 @@ class HDF5Catalogue(object):
 			self.readonly = True
 			self.storage = h5py.File(filename, mode=mode, libver=self.params['libver'], driver=self.params['driver'])
 		else:
-			self.storage = h5py.File(filename, mode=mode,
+			self.storage = h5py_cache.File(filename, mode=mode,
+									chunk_cache_mem_size=self.params['chunk_cache_mem_size'],
 									userblock_size=self.params['header_bytes'],
 									libver=self.params['libver'],
 									driver=self.params['driver'])
