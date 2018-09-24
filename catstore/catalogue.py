@@ -359,6 +359,21 @@ class Catalogue(object):
 			data['imagecoord'] = np.transpose([ximage, yimage])
 		return Catalogue(data=data)
 
+	def update(self, arr, sel=True, operation='replace', columns=None):
+		""" """
+		if not columns:
+			columns = [name in arr.dtype.names if not name.startswith("_")]
+
+		logging.debug("update with %s columns %s", operation, str(columns))
+
+		for name in columns:
+			if operation == 'sum':
+				self.__dict__['_data'][name][sel] += arr[name]
+			elif operation == 'replace':
+				self.__dict__['_data'][name][sel] = arr[name]
+			else:
+				raise ValueError("update operation must be 'replace' or 'sum' (unknown %s)", operation)
+
 	def plot(self, nplot=10000, **plotparams):
 		""" Make a cartesian image coordinates scatter plot using matplotlib.
 
