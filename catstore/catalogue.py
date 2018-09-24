@@ -362,7 +362,7 @@ class Catalogue(object):
 	def update(self, arr, sel=True, operation='replace', columns=None):
 		""" """
 		if not columns:
-			columns = [name in arr.dtype.names if not name.startswith("_")]
+			columns = [name for name in arr.dtype.names if not name.startswith("_")]
 
 		logging.debug("update with %s columns %s", operation, str(columns))
 
