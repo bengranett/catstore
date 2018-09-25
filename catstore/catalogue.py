@@ -357,7 +357,7 @@ class Catalogue(object):
 		if transform is not None:
 			ximage, yimage = transform(lon[sel], lat[sel])
 			data['imagecoord'] = np.transpose([ximage, yimage])
-		return Catalogue(data=data)
+		return Catalogue(data=data, selection=sel)
 
 	def update(self, arr, sel=True, operation='replace', columns=None):
 		""" """
