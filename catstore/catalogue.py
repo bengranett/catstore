@@ -352,7 +352,7 @@ class Catalogue(object):
 
 		sel_lon = np.abs(dlon) < (width / 2. + pad_ra)
 		sel_lat = np.abs(dlat) < (height / 2. + pad_dec)
-		sel = np.where(sel_lon & sel_lat)
+		sel = sel_lon & sel_lat
 		data = self._data[sel]
 		if transform is not None:
 			ximage, yimage = transform(lon[sel], lat[sel])
