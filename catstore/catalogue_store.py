@@ -88,6 +88,10 @@ class CatalogueStore(object):
 						'overwrite': False,
 						'libver': 'latest',
 						'driver': None,
+						'rdcc_nbytes': 1024**3,
+						'rdcc_w0': 0,
+						'rdcc_nslots': 52709,
+						'chunk_size': 1024,
 						}
 
 	_immutable_columns = ('index', 'zone', '_index', '_zone', 'skycoord')
@@ -239,7 +243,12 @@ class CatalogueStore(object):
 											preallocate_file=self.params['preallocate_file'],
 											overwrite=self.params['overwrite'],
 											libver=self.params['libver'],
-											driver=self.params['driver'])
+											driver=self.params['driver'],
+											rdcc_nbytes=self.params['rdcc_nbytes'],
+											rdcc_w0=self.params['rdcc_w0'],
+											rdcc_nslots=self.params['rdcc_nslots'],
+											chunk_size=self.params['chunk_size']
+											)
 		# access the data group
 		self._datastore = self._h5file.data
 		self._metadata = self._h5file.metadata
