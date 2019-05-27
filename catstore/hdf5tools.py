@@ -302,7 +302,9 @@ class HDF5Catalogue(object):
 		'overwrite': False,
 		'libver': 'latest',
 		'driver': None,
-		'chunk_cache_mem_size': 1024**3
+		'rdcc_nbytes': 1024**3,
+		'rdcc_w0': 0.75,
+		'rdcc_nslots': 52709,
 	}
 
 
@@ -337,17 +339,23 @@ class HDF5Catalogue(object):
 				raise HDF5CatError("File %s exists.  Will not overwrite."%filename)
 
 		logging.debug("HDF5 chunk_size: %s", self.params['chunk_size'])
-		logging.debug("HDF5 driver: %s", self.params['driver'])
-		logging.debug("HDF5 libver: %s", self.params['libver'])
+
+		h5params = {
+			'libver': self.params['libver'],
+			'driver': self.params['driver'],
+			'rdcc_nbytes': self.params['rdcc_nbytes'],
+			'rdcc_w0': self.params['rdcc_w0'],
+			'rdcc_nslots': self.params['rdcc_nslots']
+		}
+		for key,value in h5params.items():
+			logging.debug("HDF5 %s: %s", key, value)
 
 		if mode == 'r':
 			self.readonly = True
-			self.storage = h5py.File(filename, mode=mode, libver=self.params['libver'], driver=self.params['driver'])
+			self.storage = h5py.File(filename, mode=mode, **h5params)
 		else:
 			self.storage = h5py.File(filename, mode=mode,
-									userblock_size=self.params['header_bytes'],
-									libver=self.params['libver'],
-									driver=self.params['driver'])
+									userblock_size=self.params['header_bytes'], **h5params)
 
 		self.attributes = self.storage.attrs
 
