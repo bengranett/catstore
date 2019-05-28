@@ -288,7 +288,7 @@ class HDF5Catalogue(object):
 		'special_group_names': {'data': 'data', 'columns': 'columns',
 								'units': 'units', 'description': 'description'},
 		'header_line_width': 80,
-		'chunk_size': None,
+		'chunk_size': 1024,
 		'hash_length': 32,
 		'header_bytes': 8192,
 		'stamp': 'pypelid',
@@ -303,7 +303,7 @@ class HDF5Catalogue(object):
 		'libver': 'latest',
 		'driver': None,
 		'rdcc_nbytes': 1024**3,
-		'rdcc_w0': 0.75,
+		'rdcc_w0': 0,
 		'rdcc_nslots': 52709,
 	}
 
@@ -378,6 +378,8 @@ class HDF5Catalogue(object):
 
 	def _check_inputs(self):
 		""" Sanity check arguments. """
+		if self.params['chunk_size'] == 0:
+			self.params['chunk_size'] = None
 		assert self.params['hash_length'] > 1 and self.params['hash_length'] < 256
 		assert self.params['hash_info_len'] > 0
 		assert self.params['hash_algo_len'] == 1
