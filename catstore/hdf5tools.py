@@ -288,7 +288,7 @@ class HDF5Catalogue(object):
 		'special_group_names': {'data': 'data', 'columns': 'columns',
 								'units': 'units', 'description': 'description'},
 		'header_line_width': 80,
-		'chunk_size': 1024,
+		'chunk_size': None,
 		'hash_length': 32,
 		'header_bytes': 8192,
 		'stamp': 'pypelid',
