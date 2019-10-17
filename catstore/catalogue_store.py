@@ -92,6 +92,7 @@ class CatalogueStore(object):
 						'rdcc_w0': 0,
 						'rdcc_nslots': 52709,
 						'chunk_size': 1024,
+						'swmr': False,
 						}
 
 	_immutable_columns = ('index', 'zone', '_index', '_zone', 'skycoord')
@@ -159,7 +160,7 @@ class CatalogueStore(object):
 		#							require_hash=self.params['require_hash'],
 		#								official_stamp=self.params['official_stamp'])
 
-		with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite'], libver=self.params['libver']) as h5file:
+		with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite'], libver=self.params['libver'], swmr=self.params['swmr']) as h5file:
 
 			# ensure that required attributes are there with acceptable values.
 			for key, options in self._required_attributes.items():
@@ -247,7 +248,8 @@ class CatalogueStore(object):
 											rdcc_nbytes=self.params['rdcc_nbytes'],
 											rdcc_w0=self.params['rdcc_w0'],
 											rdcc_nslots=self.params['rdcc_nslots'],
-											chunk_size=self.params['chunk_size']
+											chunk_size=self.params['chunk_size'],
+											swmr=self.params['swmr']
 											)
 		# access the data group
 		self._datastore = self._h5file.data

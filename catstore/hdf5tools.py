@@ -305,6 +305,7 @@ class HDF5Catalogue(object):
 		'rdcc_nbytes': 1024**3,
 		'rdcc_w0': 0,
 		'rdcc_nslots': 52709,
+		'swmr': False,
 	}
 
 
@@ -345,7 +346,8 @@ class HDF5Catalogue(object):
 			'driver': self.params['driver'],
 			'rdcc_nbytes': self.params['rdcc_nbytes'],
 			'rdcc_w0': self.params['rdcc_w0'],
-			'rdcc_nslots': self.params['rdcc_nslots']
+			'rdcc_nslots': self.params['rdcc_nslots'],
+			'swmr': self.params['swmr']
 		}
 		for key,value in h5params.items():
 			logging.debug("HDF5 %s: %s", key, value)
@@ -440,7 +442,7 @@ class HDF5Catalogue(object):
 
 	def update_attributes(self, attributes=None, **attrs):
 		"""Add attributes to the HDF5 file.
-		attributes - dictionary of attributes 
+		attributes - dictionary of attributes
 					 (may also be specified as named arguments)
 		"""
 		if self.readonly:
@@ -571,7 +573,7 @@ class HDF5Catalogue(object):
 		self.update_metagroup(self.params['special_group_names']['columns'], {name: "%i %s" % (dim, dtype_string)})
 
 	def append_dataset(self, group, name, arr):
-		""" Append a data array to a dataset. 
+		""" Append a data array to a dataset.
 
 		Parameters
 		----------
@@ -596,7 +598,7 @@ class HDF5Catalogue(object):
 		# self.logger.debug("appending to dataset: %s %s chunky:%s",name,group[name].shape,group[name].chunks)
 
 	def append_group(self, group_name, data, index=None):
-		""" Append data to a group. 
+		""" Append data to a group.
 
 		Parameters
 		----------
