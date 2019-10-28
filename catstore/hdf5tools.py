@@ -395,7 +395,6 @@ class HDF5Catalogue(object):
 		assert isinstance(self.params['stamp'], str)
 		assert isinstance(self.params['title'], str)
 		assert self.params['libver'] in (None,'latest','earliest')
-		assert self.params['driver'] in (None,'core','family')
 
 	def __enter__(self):
 		""" """
