@@ -21,7 +21,7 @@ def check_is_iterable(py_obj):
     Returns:
         iter_ok (bool): True if item is iterable, False is item is not
     """
-    if type(py_obj) in (str, unicode):
+    if type(py_obj) in (str, str):
         return False
     try:
         iter(py_obj)
@@ -36,7 +36,7 @@ def dict_reverse_lookup(d, v):
 
     """
     try:
-        key = (key for key, value in d.items() if value == v).next()
+        key = next((key for key, value in list(d.items()) if value == v))
     except StopIteration:
         raise ValueError("Item not found in dictionary (%s)"%str(v))
     return key
@@ -55,7 +55,7 @@ def dict_to_structured_array(data_dict):
     """
     lengths = []
     dtypes = []
-    for name, arr in data_dict.items():
+    for name, arr in list(data_dict.items()):
         lengths.append(arr.shape[0])
         dim = 1
         if len(arr.shape) > 1:
@@ -70,7 +70,7 @@ def dict_to_structured_array(data_dict):
     struc_array = np.zeros(lengths[0], dtype=dtypes)
 
     # load the data
-    for name, arr in data_dict.items():
+    for name, arr in list(data_dict.items()):
         struc_array[name] = arr
 
     return struc_array

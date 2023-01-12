@@ -20,7 +20,7 @@ def validate_nside(nside):
     TypeError : not an int type
     ValueError : not a positive factor of 2
     """
-    if not isinstance(nside, (int, long, float)):
+    if not isinstance(nside, (int, float)):
         raise TypeError('Healpix nside must be a number')
     if nside < 1:
         raise ValueError('Healpix nside must be greater than 0.')
@@ -41,7 +41,7 @@ def validate_resolution(resolution):
     TypeError : not an int type
     ValueError : not a positive factor of 2
     """
-    if not isinstance(resolution, (int, long)):
+    if not isinstance(resolution, int):
         raise TypeError('Healpix nside must be an integer number')
     if resolution < 0:
         raise ValueError('Healpix resolution must be greater than or equal to 0.')

@@ -6,7 +6,7 @@ import os
 import socket
 import numpy as np
 import h5py
-import StringIO
+import io
 import logging
 import textwrap
 import copy
@@ -323,7 +323,7 @@ class HDF5Catalogue(object):
         self.data = None
         self.dtypes = []
 
-        for key, value in input_params.items():
+        for key, value in list(input_params.items()):
             try:
                 self.params[key] = value
             except KeyError:
@@ -349,7 +349,7 @@ class HDF5Catalogue(object):
             'rdcc_nslots': self.params['rdcc_nslots'],
             'swmr': self.params['swmr']
         }
-        for key,value in h5params.items():
+        for key,value in list(h5params.items()):
             logging.debug("HDF5 %s: %s", key, value)
 
         if mode == 'r':
@@ -385,7 +385,7 @@ class HDF5Catalogue(object):
         assert self.params['hash_length'] > 1 and self.params['hash_length'] < 256
         assert self.params['hash_info_len'] > 0
         assert self.params['hash_algo_len'] == 1
-        assert self.params['hash_algorithm'] in hash_algorithms.values()
+        assert self.params['hash_algorithm'] in list(hash_algorithms.values())
         assert self.params['header_line_width'] > 0
         assert self.params['header_bytes'] > 0
         assert self.params['header_bytes'] > 0
@@ -412,7 +412,7 @@ class HDF5Catalogue(object):
         self.logger.debug("file closed `%s`.", self.filename)
 
         # reset signal handler
-        for sig, handler in state.items():
+        for sig, handler in list(state.items()):
             signal.signal(sig, handler)
 
     def __str__(self):
@@ -447,10 +447,10 @@ class HDF5Catalogue(object):
         if self.readonly:
             raise HDF5CatError("File loaded in read-only mode.")
         if attributes is not None:
-            for key, value in attributes.items():
+            for key, value in list(attributes.items()):
                 self.storage.attrs[key] = value
                 self.logger.debug("HDF5 set %s %s %s", key, value, self.storage.attrs[key])
-        for key, value in attrs.items():
+        for key, value in list(attrs.items()):
             self.storage.attrs[key] = value
 
     def preallocate_groups(self, group_names, nmax, dtypes):
@@ -619,7 +619,7 @@ class HDF5Catalogue(object):
             group.attrs['done'] = False
 
         try:
-            columns = data.keys()
+            columns = list(data.keys())
         except AttributeError:
             columns = data.dtype.names
 
@@ -721,7 +721,7 @@ class HDF5Catalogue(object):
         group = self.storage.require_group(group_path)
 
         try:
-            columns = data.keys()
+            columns = list(data.keys())
         except AttributeError:
             columns = data.dtype.names
 
@@ -790,7 +790,7 @@ class HDF5Catalogue(object):
             g = self.data[group]
 
             if columns is None:
-                columns = g.keys()
+                columns = list(g.keys())
 
             group_hash = blake2b(digest_size=digest_size)
             for dataset in columns:
@@ -801,7 +801,7 @@ class HDF5Catalogue(object):
                         logging.warning("dataset has changed '%s/%s'", group, dataset)
                         fail = True
                     else:
-                        logging.debug(u"\u2714 '%s/%s'", group, dataset)
+                        logging.debug("\u2714 '%s/%s'", group, dataset)
                 else:
                     if '_hash' in g[dataset].attrs and not overwrite:
                         raise ValueError("Will not overwrite data hashes")
@@ -846,9 +846,9 @@ class HDF5Catalogue(object):
         """
         if self.readonly: raise HDF5CatError("File loaded in read-only mode.")
         group = self.storage.require_group(group_name)
-        for key, value in attributes.items():
+        for key, value in list(attributes.items()):
             group.attrs[key] = value
-        for key, value in attrs.items():
+        for key, value in list(attrs.items()):
             group.attrs[key] = value
 
     def get_metagroup(self, group_name):
@@ -888,10 +888,10 @@ class HDF5Catalogue(object):
 
     def format_attr(self, name, attrs):
         """ """
-        header = StringIO.StringIO()
+        header = io.StringIO()
         header.write(self.horizline(name))
 
-        for key, value in attrs.items():
+        for key, value in list(attrs.items()):
             header.write("%16s: %s\n"%(key,value))
 
         header.write(self.horizline())
@@ -917,7 +917,7 @@ class HDF5Catalogue(object):
         header_bytes = self.params['header_bytes'] - self.params['hash_length'] - reserved
         # self.logger.debug("HDF5 File %s has header block size %i.", self.filename, header_bytes)
 
-        header = StringIO.StringIO()
+        header = io.StringIO()
         header.write(" " * header_bytes)
         header.seek(0)
 
@@ -928,7 +928,7 @@ class HDF5Catalogue(object):
         header.write(self.format_attr("file attributes", f.attrs))
 
         for group_name in f:
-            if group_name in self.params['special_group_names'].values():
+            if group_name in list(self.params['special_group_names'].values()):
                 continue
             if group_name.startswith("_"):
                 continue
@@ -937,7 +937,7 @@ class HDF5Catalogue(object):
         # write the column description lines
         header.write(self.horizline("data columns"))
         if self.params['special_group_names']['columns'] in f:
-            for name, info in f[self.params['special_group_names']['columns']].attrs.items():
+            for name, info in list(f[self.params['special_group_names']['columns']].attrs.items()):
                 try:
                     unit = f[self.params['special_group_names']['units']].attrs[name]
                 except:
@@ -1004,7 +1004,7 @@ class HDF5Catalogue(object):
         if thing is None:
             thing = self.storage
         try:
-            thing.items()
+            list(thing.items())
         except AttributeError:
             return
 
@@ -1016,10 +1016,10 @@ class HDF5Catalogue(object):
             if attrs:
                 self.show(attrib, pre=pre, level=level, datasets=datasets, attrs=attrs)
 
-        for key, value in thing.items():
+        for key, value in list(thing.items()):
 
             if level == 0:
-                print("+ "),
+                print(("+ "), end=' ')
 
             if isinstance(value, h5py.Group):
                 s = str(value)
@@ -1033,7 +1033,7 @@ class HDF5Catalogue(object):
             else:
                 s = str(value)
 
-            print "%s%s%s: %s"%("   "*level, pre, key, s)
+            print("%s%s%s: %s"%("   "*level, pre, key, s))
             self.show(value, pre+"\__",level+1, datasets=datasets, attrs=attrs)
 
 

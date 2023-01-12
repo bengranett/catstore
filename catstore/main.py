@@ -3,7 +3,7 @@ import os
 import logging
 import argparse
 from catstore import __version__
-from catalogue_store import CatalogueStore
+from .catalogue_store import CatalogueStore
 
 
 def show(args):
@@ -17,7 +17,7 @@ def show_head(args):
 	for path in args.path:
 		with CatalogueStore(path) as cat:
 			userblock = cat._h5file.storage.userblock_size
-		print file(path).read(userblock)
+		print(file(path).read(userblock))
 
 def showid(args):
 	""" print the file ID """
@@ -25,9 +25,9 @@ def showid(args):
 		with CatalogueStore(path) as cat:
 			try:
 				digest = cat._hash
-			except KeyError, AttributeError:
+			except KeyError as AttributeError:
 				digest = 'none'
-			print path, digest
+			print(path, digest)
 
 def verify(args):
 	""" run the data validation """

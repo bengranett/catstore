@@ -70,7 +70,7 @@ class CatalogueStore(object):
     FULLSKY = 'FULLSKY'
     HEALPIX = 'HEALPIX'
     _required_attributes = {'partition_scheme': (HEALPIX,),
-                            'zone_resolution': range(12),
+                            'zone_resolution': list(range(12)),
                             'zone_order': (HP.RING, HP.NEST)
                             }
     _required_columns = ('skycoord',)
@@ -101,7 +101,7 @@ class CatalogueStore(object):
         self.params['preallocate_file'] = preallocate_file
         self.params['overwrite'] = overwrite
 
-        for key, value in input_params.items():
+        for key, value in list(input_params.items()):
             try:
                 self.params[key] = value
             except KeyError:
@@ -146,7 +146,7 @@ class CatalogueStore(object):
         assert self.params['require_hash'] in (True, False)
         assert self.params['preallocate_file'] in (True, False)
         assert self.params['overwrite'] in (True, False)
-        assert isinstance(self.params['official_stamp'], basestring)
+        assert isinstance(self.params['official_stamp'], str)
         HP.validate_resolution(self.params['zone_resolution'])
         HP.validate_order(self.params['zone_order'])
 
@@ -160,7 +160,7 @@ class CatalogueStore(object):
         with hdf5tools.HDF5Catalogue(self.filename, mode='r', overwrite=self.params['overwrite'], libver=self.params['libver'], swmr=self.params['swmr']) as h5file:
 
             # ensure that required attributes are there with acceptable values.
-            for key, options in self._required_attributes.items():
+            for key, options in list(self._required_attributes.items()):
                 try:
                     assert(h5file.attributes[key] in options)
                 except KeyError:
@@ -209,10 +209,10 @@ class CatalogueStore(object):
     def __iter__(self):
         """ """
         self.cat_metadata = {}
-        for key, value in self._attributes.items():
+        for key, value in list(self._attributes.items()):
             self.cat_metadata[key] = value
         self._iter_zone_index = 0
-        self._iter_zone_list = self._datastore.keys()
+        self._iter_zone_list = list(self._datastore.keys())
         return self
 
     def __len__(self):
@@ -221,14 +221,14 @@ class CatalogueStore(object):
         except KeyError:
             return 0
 
-    def next(self):
+    def __next__(self):
         """ """
         try:
             zone = self._iter_zone_list[self._iter_zone_index]
             self._iter_zone_index += 1
 
             # Include zone index into the metadata so it can be looked up later
-            metadata = dict(self.cat_metadata.items()+[('zone', int(zone))])
+            metadata = dict(list(self.cat_metadata.items())+[('zone', int(zone))])
             return catalogue.Catalogue(data=self._datastore[zone], metadata=metadata)
 
         except IndexError:
@@ -343,7 +343,7 @@ class CatalogueStore(object):
 
         try:
             data['skycoord']
-        except KeyError, ValueError:
+        except KeyError as ValueError:
             raise Exception("skycoord column is required")
 
         zone_index = self._index(*data['skycoord'].transpose())
@@ -358,7 +358,7 @@ class CatalogueStore(object):
 
         # Save the number of rows in table (i.e. total number of objects in the catalogue)
         if isinstance(data, dict):
-            key, arr = data.items()[0]
+            key, arr = list(data.items())[0]
             count = len(arr)
         else:
             count = len(data)
@@ -386,7 +386,7 @@ class CatalogueStore(object):
 
         # Save the number of rows in table (i.e. total number of objects in the catalogue)
         if isinstance(data, dict):
-            key, arr = data.items()[0]
+            key, arr = list(data.items())[0]
             count = len(arr)
         else:
             count = len(data)
@@ -480,7 +480,7 @@ class CatalogueStore(object):
 
             self.logger.debug("zeroing column %s", name)
 
-            for zone in self._datastore.keys():
+            for zone in list(self._datastore.keys()):
                 self._datastore[zone][name][:] = np.zeros(self._datastore[zone][name].shape)
 
     def _index(self, lon, lat):
@@ -504,13 +504,13 @@ class CatalogueStore(object):
 
     def get_zones(self):
         """ Return a list of zone identifiers. """
-        return self._datastore.keys()
+        return list(self._datastore.keys())
 
     def get_data(self):
         """ A generating function that returns the hdf5 groups."""
         self.logger.warning("get_data is deprecated.  Use iterator instead.")
         metadata = {}
-        for key, value in self._attributes.items():
+        for key, value in list(self._attributes.items()):
             metadata[key] = value
 
         for zone in self.get_zones():
@@ -541,9 +541,9 @@ class CatalogueStore(object):
         """ Return the column/dataset descriptions as a structured-array-like dtype object.
         """
         dtypes = []
-        for zone in self._datastore.keys():
+        for zone in list(self._datastore.keys()):
             # get a data group (doesn't matter which)
-            for name, dataset in self._datastore[zone].items():
+            for name, dataset in list(self._datastore[zone].items()):
                 # dim is the number of elements of each entry
                 dim = dataset.shape[1:]
                 # hdf5 group names are returned in unicode
@@ -627,7 +627,7 @@ class CatalogueStore(object):
             j = i + count
 
             if columns is None:
-                columns = group.keys()
+                columns = list(group.keys())
 
             for name in columns:
                 if not name in group:
@@ -707,7 +707,7 @@ class CatalogueStore(object):
 
         selection_dict = {}
         count = 0
-        for zone, matches in match_dict.items():
+        for zone, matches in list(match_dict.items()):
             data = self._retrieve_zone(zone)
             lon, lat = np.transpose(data['skycoord'][:][matches])
             dlon, dlat = sphere.rotate_lonlat(lon, lat, [(orientation, clon, clat)],
@@ -787,11 +787,11 @@ class CatalogueStore(object):
 
         # zone start
         i = 0
-        for zone, selection in matches.items():
+        for zone, selection in list(matches.items()):
             data = self._retrieve_zone(zone)
 
             if columns is None:
-                columns = data.keys()
+                columns = list(data.keys())
 
             # zone end
             j = i+len(selection)
@@ -816,7 +816,7 @@ class CatalogueStore(object):
 
         # construct a catalogue object
         metadata = {}
-        for key, value in self._attributes.items():
+        for key, value in list(self._attributes.items()):
             metadata[key] = value
         cat = catalogue.Catalogue(data=struc_array,
                                 metadata=metadata,
@@ -879,8 +879,8 @@ class CatalogueStore(object):
             tot += len(lon)
         hp.graticule()
 
-        print "number of groups",counter
-        print "number of points plotted",tot
+        print("number of groups",counter)
+        print("number of points plotted",tot)
 
 class CatStoreError(Exception):
     pass

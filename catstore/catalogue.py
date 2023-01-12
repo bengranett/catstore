@@ -29,9 +29,9 @@ class Catalogue(object):
         # process the input meta data
         meta = {}
         if metadata is not None:
-            for key, value in metadata.items():
+            for key, value in list(metadata.items()):
                 meta[key] = value
-        for key, value in attrs.items():
+        for key, value in list(attrs.items()):
             if key not in ['imagecoord','skycoord']:
                 meta[key] = value
 
@@ -65,9 +65,9 @@ class Catalogue(object):
                 self._spatial_key = 'skycoord'
             except KeyError:
                 # Look at the attrs, if they contain any kind of coordinates.
-                if 'imagecoord' in attrs.keys():
+                if 'imagecoord' in list(attrs.keys()):
                     self._spatial_key = 'imagecoord'
-                elif 'skycoord' in attrs.keys():
+                elif 'skycoord' in list(attrs.keys()):
                     self._spatial_key = 'skycoord'
                 else:
                     # This only logs the error - it does not raise an Exception.
@@ -170,7 +170,7 @@ class Catalogue(object):
     def __contains__(self, key):
         """ Check if we have the given field key """
         if self._data.dtype.fields is None: return False
-        return self._data.dtype.fields.has_key(key)
+        return key in self._data.dtype.fields
 
     def _convert_CatStore(self, store):
         """ """
@@ -213,7 +213,7 @@ class Catalogue(object):
 
             # Check if the input data is a dict
             try:
-                data.items()
+                list(data.items())
             except AttributeError:
                 raise TypeError('The Catalogue class must be loaded with a dictionary-like structure or numpy structured array!')
             else:
