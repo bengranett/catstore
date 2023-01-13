@@ -977,7 +977,7 @@ class HDF5Catalogue(object):
             head = head[:header_bytes]
             self.logger.critical("HDF5 header truncated to %i characters!  Your header may be corrupted.", len(head))
 
-        with open(self.filename, 'rb+') as f:
+        with open(self.filename, 'rt+') as f:
             f.seek(self.params['hash_length'] + reserved)
             f.write(head)
 
@@ -993,7 +993,7 @@ class HDF5Catalogue(object):
             hash_len_code = format(self.params['hash_length'], str(self.params['hash_info_len']) + 'x')
             assert len(hash_len_code) == self.params['hash_info_len']
             # write the hash
-            with open(self.filename, 'rb+') as f:
+            with open(self.filename, 'rt+') as f:
                 f.write(self.params['stamp'])
                 f.write(hash_len_code)
                 f.write(algorithm_code)
