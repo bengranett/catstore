@@ -204,7 +204,10 @@ class CatalogueStore(object):
         try:
             return self._attributes[key]
         except KeyError:
-            return self._metadata[key]
+            try:
+                return self._metadata[key]
+            except KeyError:
+                raise AttributeError
 
     def __iter__(self):
         """ """
@@ -547,7 +550,7 @@ class CatalogueStore(object):
                 # dim is the number of elements of each entry
                 dim = dataset.shape[1:]
                 # hdf5 group names are returned in unicode
-                dtypes.append((name.encode('ascii'), dataset.dtype, dim))
+                dtypes.append((name, dataset.dtype, dim))
             if len(dtypes) > 0:
                 # if we got something, break out
                 break
@@ -585,7 +588,7 @@ class CatalogueStore(object):
                     dtype_name = dtype[name]
                 except KeyError:
                     dtype_name = float
-                d.append((name.encode('ascii'), dtype_name))
+                d.append((name, dtype_name))
             dtype = np.dtype(d)
 
         dtype = misc.concatenate_dtypes(
@@ -633,7 +636,7 @@ class CatalogueStore(object):
                 if not name in group:
                     continue
                 column = group[name]
-                struc_array[name.encode('ascii')][i:j] = column[start:end]
+                struc_array[name][i:j] = column[start:end]
 
             struc_array['_zone'][i:j] = np.ones(count) * int(zone)
             struc_array['_index'][i:j] = np.arange(count)

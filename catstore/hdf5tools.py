@@ -421,7 +421,10 @@ class HDF5Catalogue(object):
 
     def __getattr__(self, key):
         """ """
-        return self.storage.attrs[key]
+        try:
+            return self.storage.attrs[key]
+        except KeyError:
+            raise AttributeError
 
     def __getitem__(self, key):
         """ """

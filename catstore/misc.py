@@ -60,7 +60,7 @@ def dict_to_structured_array(data_dict):
         dim = 1
         if len(arr.shape) > 1:
             dim = arr.shape[1:]
-        dtypes.append((name.encode('ascii'), arr.dtype, dim))
+        dtypes.append((name, arr.dtype, dim))
 
     lengths = np.array(lengths)
     if not np.all(lengths == lengths[0]):
