@@ -19,8 +19,6 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
-os.system("git describe && echo version = \\\"`git describe`\\\" > catstore/version.py")
-from catstore import version
 
 
 if USE_CYTHON:
@@ -63,7 +61,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version=version.version,
+    version="1.0.0",
 
     description='Interface full-sky astronomical catalogues',
     long_description=long_description,
